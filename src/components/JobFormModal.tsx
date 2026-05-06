@@ -2,15 +2,16 @@ import { DeleteOutlined, PlayCircleOutlined, PlusOutlined, RobotOutlined } from 
 import CodeMirror from "@uiw/react-codemirror";
 import { javascript } from "@codemirror/lang-javascript";
 import type { Extension } from "@codemirror/state";
-import { Button, Collapse, Form, Input, InputNumber, message, Modal, Segmented, Space, Typography } from "antd";
+import { Button, Collapse, Form, Input, InputNumber, message, Modal, Segmented, Space, TimePicker, Typography } from "antd";
 import type { FormInstance } from "antd";
+import dayjs from "dayjs";
 import { useEffect, useMemo, useState } from "react";
 import type { ExecutionMode, LaunchdExecution, LaunchdJobInput, LaunchdSchedule } from "../types/launchd";
 import { generateNodeScript, runNodeScriptDebug } from "../services/launchd";
 import type { RunNodeScriptDebugResponse } from "../services/launchd";
 import { ScriptDebugPanel } from "./ScriptDebugPanel";
 import { friendlyError } from "../utils/errors";
-import { commandSummary, defaultExecution, defaultSchedule, emptyJobInput, scheduleSummary } from "../utils/launchd";
+import { defaultExecution, defaultSchedule, emptyJobInput } from "../utils/launchd";
 
 interface JobFormModalProps {
   open: boolean;
@@ -26,8 +27,6 @@ export function JobFormModal({ open, initialValue, saving, onCancel, onSubmit }:
   const [form] = Form.useForm<LaunchdJobInput>();
   const [schedulePreset, setSchedulePreset] = useState<SchedulePreset>("daily");
   const executionMode = Form.useWatch(["execution", "mode"], form) as ExecutionMode | undefined;
-  const name = Form.useWatch("name", form) as string | undefined;
-  const description = Form.useWatch("description", form) as string | undefined;
   const schedule = Form.useWatch("schedule", form) as LaunchdSchedule | undefined;
   const execution = Form.useWatch("execution", form) as LaunchdExecution | undefined;
   const inlineScript = Form.useWatch(["execution", "inlineScript"], form) as string | undefined;
@@ -52,7 +51,6 @@ export function JobFormModal({ open, initialValue, saving, onCancel, onSubmit }:
   const previewSchedule = schedule ?? defaultSchedule;
   const previewExecution = execution ?? defaultExecution;
   const currentExecutionMode = (executionMode ?? previewExecution.mode ?? "inline_shell") as ExecutionMode;
-  const previewWarnings = buildPreviewWarnings(previewExecution);
 
   function getSchedule() {
     return form.getFieldValue("schedule") ?? defaultSchedule;
@@ -174,7 +172,7 @@ export function JobFormModal({ open, initialValue, saving, onCancel, onSubmit }:
     <Modal
       title={initialValue?.id ? "编辑任务" : "新建任务"}
       open={open}
-      width={1120}
+      width={900}
       onCancel={onCancel}
       onOk={handleOk}
       confirmLoading={saving}
@@ -250,27 +248,6 @@ export function JobFormModal({ open, initialValue, saving, onCancel, onSubmit }:
             <AdvancedSettings form={form} mode={currentExecutionMode} />
           </div>
 
-          <aside className="form-preview">
-            <Typography.Text type="secondary" className="preview-label">
-              预览
-            </Typography.Text>
-            <Typography.Title level={4}>{name?.trim() || "未命名任务"}</Typography.Title>
-            <Typography.Paragraph type="secondary" ellipsis={{ rows: 2 }}>
-              {description?.trim() || "没有描述"}
-            </Typography.Paragraph>
-
-            <PreviewLine label="运行计划" value={scheduleSummary(previewSchedule)} />
-            <PreviewLine label="执行命令" value={commandSummary(previewExecution)} />
-            <PreviewLine label="工作目录" value={previewExecution.workingDirectory?.trim() || "默认目录"} />
-
-            {previewWarnings.length > 0 && (
-              <div className="preview-warnings">
-                {previewWarnings.map((warning) => (
-                  <div key={warning}>{warning}</div>
-                ))}
-              </div>
-            )}
-          </aside>
         </div>
       </Form>
     </Modal>
@@ -351,10 +328,14 @@ function ScheduleComposer({
             )}
 
             <Form.Item label="几点运行">
-              <Input type="time" step={1} value={timeInputValue(schedule)} onChange={(event) => onTimeChange(event.target.value)} />
+              <TimePicker
+                value={dayjs(timeInputValue(schedule), "HH:mm:ss")}
+                format="HH:mm:ss"
+                className="full-width"
+                onChange={(_, timeString) => onTimeChange(typeof timeString === "string" ? timeString : "00:00:00")}
+              />
             </Form.Item>
           </div>
-
           <QuickButtonRow
             options={[
               { label: "09:00", value: "09:00:00" },
@@ -565,15 +546,6 @@ function SectionTitle({ step, title }: { step: string; title: string }) {
   );
 }
 
-function PreviewLine({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="preview-line">
-      <span>{label}</span>
-      <strong>{value}</strong>
-    </div>
-  );
-}
-
 function CodeEditor({
   value,
   onChange,
@@ -587,6 +559,7 @@ function CodeEditor({
     <CodeMirror
       value={value}
       height="320px"
+      width="100%"
       extensions={extensions}
       basicSetup={{ lineNumbers: true, foldGutter: true }}
       onChange={(next) => onChange?.(next)}
@@ -617,21 +590,3 @@ function pad(value: number) {
   return String(value).padStart(2, "0");
 }
 
-function buildPreviewWarnings(execution: LaunchdExecution) {
-  const warnings: string[] = [];
-  const interpreter = execution.interpreter?.trim();
-  const scriptPath = execution.scriptPath?.trim();
-  const workingDirectory = execution.workingDirectory?.trim();
-
-  if (interpreter && !interpreter.startsWith("/")) {
-    warnings.push("解释器建议使用绝对路径");
-  }
-  if (scriptPath && !scriptPath.startsWith("/")) {
-    warnings.push("脚本路径建议使用绝对路径");
-  }
-  if (workingDirectory && !workingDirectory.startsWith("/")) {
-    warnings.push("工作目录建议使用绝对路径");
-  }
-
-  return warnings;
-}

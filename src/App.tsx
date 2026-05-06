@@ -148,15 +148,9 @@ function App() {
 
   return (
     <Layout className="app-shell">
-      <div className="ambient-stage" aria-hidden="true">
-        <div className="stage-grid" />
-        <img className="stage-muse" src="/neon-muse.svg" alt="" />
-        <div className="stage-ribbons" />
-      </div>
       <Header className="app-header">
         <div className="brand-block">
           <div className="app-title">Tick</div>
-          <div className="app-subtitle">macOS LaunchAgent 控制台</div>
         </div>
         <div className="header-stats" aria-label="任务状态概览">
           <StatusPill label="全部" value={stats.total} />

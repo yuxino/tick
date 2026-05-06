@@ -37,59 +37,6 @@ body {
   background: transparent;
 }
 
-.ambient-stage {
-  position: fixed;
-  right: 14px;
-  top: 182px;
-  z-index: 0;
-  width: 206px;
-  height: 206px;
-  overflow: hidden;
-  pointer-events: none;
-}
-
-.stage-muse {
-  position: absolute;
-  right: -26px;
-  bottom: -18px;
-  width: 198px;
-  height: 198px;
-  object-fit: cover;
-  border: 1px solid rgba(32, 246, 210, 0.26);
-  border-radius: 8px;
-  opacity: 0.18;
-  filter: saturate(1.08);
-}
-
-.stage-grid {
-  position: absolute;
-  right: 0;
-  bottom: 0;
-  width: 160px;
-  height: 160px;
-  border-right: 1px solid rgba(32, 246, 210, 0.18);
-  border-bottom: 1px solid rgba(255, 110, 180, 0.18);
-  background:
-    linear-gradient(90deg, rgba(32, 246, 210, 0.1) 1px, transparent 1px),
-    linear-gradient(0deg, rgba(255, 110, 180, 0.08) 1px, transparent 1px);
-  background-size: 18px 18px;
-  transform: perspective(260px) rotateX(58deg) rotateZ(-4deg);
-  transform-origin: bottom right;
-}
-
-.stage-ribbons {
-  position: absolute;
-  right: 34px;
-  bottom: 166px;
-  width: 120px;
-  height: 2px;
-  background: #ff6eb4;
-  box-shadow:
-    26px 18px 0 rgba(32, 246, 210, 0.72),
-    -18px 34px 0 rgba(236, 255, 124, 0.72);
-  opacity: 0.42;
-}
-
 .app-header {
   position: relative;
   z-index: 1;
@@ -109,12 +56,6 @@ body {
   font-size: 20px;
   font-weight: 650;
   line-height: 1.15;
-}
-
-.app-subtitle {
-  color: rgba(255, 255, 255, 0.62);
-  font-size: 12px;
-  line-height: 1.4;
 }
 
 .brand-block {
@@ -548,12 +489,13 @@ body {
 
 .job-form-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 300px;
+  grid-template-columns: minmax(0, 1fr);
   gap: 20px;
 }
 
 .job-form-main {
   min-width: 0;
+  width: 100%;
 }
 
 .form-section {
@@ -627,46 +569,6 @@ body {
   margin-top: 12px;
 }
 
-.form-preview {
-  position: sticky;
-  top: 0;
-  align-self: start;
-  display: grid;
-  gap: 12px;
-  padding: 14px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: #fbfcf8;
-}
-
-.form-preview h4,
-.form-preview .ant-typography {
-  margin-bottom: 0;
-}
-
-.preview-label {
-  text-transform: uppercase;
-}
-
-.preview-line {
-  display: grid;
-  gap: 4px;
-  padding-top: 10px;
-  border-top: 1px solid var(--line-soft);
-}
-
-.preview-warnings {
-  display: grid;
-  gap: 6px;
-  padding: 10px;
-  border: 1px solid rgba(183, 121, 31, 0.32);
-  border-radius: 8px;
-  background: var(--warn-soft);
-  color: var(--warn);
-  font-size: 12px;
-  line-height: 1.5;
-}
-
 .row-actions {
   white-space: nowrap;
 }
@@ -735,10 +637,6 @@ body {
 
   .job-form-layout {
     grid-template-columns: 1fr;
-  }
-
-  .form-preview {
-    position: static;
   }
 
   .detail-quick-grid {
