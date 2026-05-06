@@ -1,4 +1,4 @@
-import type { LaunchdExecution, LaunchdJob, LaunchdJobInput, LaunchdSchedule } from "../types/launchd";
+import type { JobStatus, LaunchdExecution, LaunchdJob, LaunchdJobInput, LaunchdSchedule } from "../types/launchd";
 
 export const defaultSchedule: LaunchdSchedule = {
   mode: "calendar",
@@ -14,9 +14,9 @@ export const defaultSchedule: LaunchdSchedule = {
 
 export const defaultExecution: LaunchdExecution = {
   mode: "inline_shell",
-  inlineScript: "echo \"tick $(date)\"",
+  inlineScript: `console.log("tick", new Date().toLocaleString());`,
   scriptPath: "",
-  interpreter: "/bin/sh",
+  interpreter: "/usr/bin/env node",
   arguments: "",
   workingDirectory: "",
   environment: [],
@@ -43,30 +43,42 @@ export function toJobInput(job: LaunchdJob): LaunchdJobInput {
 
 export function scheduleSummary(schedule: LaunchdSchedule) {
   if (schedule.mode === "interval") {
-    return `Every ${schedule.interval.seconds} second${schedule.interval.seconds === 1 ? "" : "s"}`;
+    return `每 ${schedule.interval.seconds} 秒执行一次`;
   }
 
   const { month, day, hour, minute, second } = schedule.calendar;
-  const dateParts = [
-    month ? `month ${month}` : "every month",
-    day ? `day ${day}` : "every day",
-  ];
   const time = `${pad(hour ?? 0)}:${pad(minute ?? 0)}:${pad(second)}`;
 
-  if (month || day) {
-    return `${dateParts.join(", ")} at ${time}`;
+  if (month && day) {
+    return `每年 ${month} 月 ${day} 日 ${time}`;
   }
-  return `Every day at ${time}`;
+  if (month) {
+    return `每年 ${month} 月每天 ${time}`;
+  }
+  if (day) {
+    return `每月 ${day} 日 ${time}`;
+  }
+  return `每天 ${time}`;
 }
 
 export function commandSummary(execution: LaunchdExecution) {
   if (execution.mode === "inline_shell") {
-    return "Inline shell";
+    return execution.inlineScript?.split("\n").find((line) => line.trim())?.trim() || "Node.js 脚本";
   }
   if (execution.mode === "script_path") {
-    return execution.scriptPath || "Script path";
+    return execution.scriptPath || "脚本路径";
   }
-  return [execution.interpreter, execution.scriptPath].filter(Boolean).join(" ") || "Interpreter";
+  return [execution.interpreter, execution.scriptPath].filter(Boolean).join(" ") || "解释器命令";
+}
+
+export function statusLabel(status: JobStatus) {
+  const labels: Record<JobStatus, string> = {
+    enabled: "已启用",
+    disabled: "已停用",
+    missing: "文件缺失",
+    error: "异常",
+  };
+  return labels[status];
 }
 
 function pad(value: number) {

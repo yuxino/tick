@@ -35,7 +35,7 @@ pub fn find_job(id: &str) -> Result<LaunchdJob, String> {
     read_registry()?
         .into_iter()
         .find(|job| job.id == id)
-        .ok_or_else(|| "Job not found".to_string())
+        .ok_or_else(|| "找不到任务".to_string())
 }
 
 pub fn delete_job(id: &str) -> Result<(), String> {

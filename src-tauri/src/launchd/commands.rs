@@ -95,9 +95,7 @@ pub fn run_launchd_job_now(id: String) -> Result<(), String> {
     let job = registry::find_job(&id)?;
     let materialized = write_job_files(&job)?;
     let args = launch_program_args(&job, &materialized)?;
-    let (program, rest) = args
-        .split_first()
-        .ok_or_else(|| "Command is empty".to_string())?;
+    let (program, rest) = args.split_first().ok_or_else(|| "命令为空".to_string())?;
     let stdout = OpenOptions::new()
         .create(true)
         .append(true)
@@ -144,7 +142,7 @@ pub fn read_launchd_log(id: String, kind: String) -> Result<JobLog, String> {
     let path = match kind.as_str() {
         "stdout" => PathBuf::from(job.stdout_path),
         "stderr" => PathBuf::from(job.stderr_path),
-        _ => return Err("Log kind must be stdout or stderr".to_string()),
+        _ => return Err("日志类型必须是 stdout 或 stderr".to_string()),
     };
     read_log(&kind, &path, 256 * 1024)
 }
@@ -155,7 +153,7 @@ pub fn clear_launchd_log(id: String, kind: String) -> Result<(), String> {
     let path = match kind.as_str() {
         "stdout" => PathBuf::from(job.stdout_path),
         "stderr" => PathBuf::from(job.stderr_path),
-        _ => return Err("Log kind must be stdout or stderr".to_string()),
+        _ => return Err("日志类型必须是 stdout 或 stderr".to_string()),
     };
     clear_log(&path)
 }

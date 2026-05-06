@@ -3,11 +3,12 @@ import {
   EditOutlined,
   PlayCircleOutlined,
   ReloadOutlined,
+  SearchOutlined,
 } from "@ant-design/icons";
-import { Button, Popconfirm, Space, Switch, Table, Tag, Tooltip, Typography } from "antd";
-import type { ColumnsType } from "antd/es/table";
+import { Button, Empty, Input, Popconfirm, Space, Switch, Tag, Tooltip, Typography } from "antd";
+import { useMemo, useState } from "react";
 import type { LaunchdJob } from "../types/launchd";
-import { commandSummary, scheduleSummary } from "../utils/launchd";
+import { commandSummary, scheduleSummary, statusLabel } from "../utils/launchd";
 
 interface JobsTableProps {
   jobs: LaunchdJob[];
@@ -41,79 +42,105 @@ export function JobsTable({
   onDelete,
   onRefresh,
 }: JobsTableProps) {
-  const columns: ColumnsType<LaunchdJob> = [
-    {
-      title: "Job",
-      dataIndex: "name",
-      render: (_, job) => (
-        <Space direction="vertical" size={0}>
-          <Typography.Text strong>{job.name}</Typography.Text>
-          <Typography.Text type="secondary" ellipsis className="mono-subtle">
-            {job.label}
-          </Typography.Text>
-        </Space>
-      ),
-    },
-    {
-      title: "Status",
-      dataIndex: "status",
-      width: 110,
-      render: (status: LaunchdJob["status"]) => <Tag color={statusColor[status]}>{status}</Tag>,
-    },
-    {
-      title: "Schedule",
-      render: (_, job) => scheduleSummary(job.schedule),
-    },
-    {
-      title: "Command",
-      render: (_, job) => (
-        <Typography.Text ellipsis className="command-cell">
-          {commandSummary(job.execution)}
-        </Typography.Text>
-      ),
-    },
-    {
-      title: "Actions",
-      width: 190,
-      render: (_, job) => (
-        <Space size={4} className="row-actions">
-          <Switch
-            size="small"
-            checked={job.status === "enabled"}
-            loading={busyId === job.id}
-            onChange={(checked) => onToggle(job, checked)}
-          />
-          <Tooltip title="Run now">
-            <Button size="small" icon={<PlayCircleOutlined />} loading={busyId === job.id} onClick={() => onRun(job)} />
-          </Tooltip>
-          <Tooltip title="Edit">
-            <Button size="small" icon={<EditOutlined />} onClick={() => onEdit(job)} />
-          </Tooltip>
-          <Popconfirm title="Delete this job?" okText="Delete" okButtonProps={{ danger: true }} onConfirm={() => onDelete(job)}>
-            <Button size="small" danger icon={<DeleteOutlined />} />
-          </Popconfirm>
-        </Space>
-      ),
-    },
-  ];
+  const [query, setQuery] = useState("");
+  const filteredJobs = useMemo(() => {
+    const keyword = query.trim().toLowerCase();
+    if (!keyword) return jobs;
+    return jobs.filter((job) =>
+      [job.name, job.description, job.label, scheduleSummary(job.schedule), commandSummary(job.execution)]
+        .join(" ")
+        .toLowerCase()
+        .includes(keyword),
+    );
+  }, [jobs, query]);
 
   return (
-    <div className="panel">
+    <div className="panel jobs-panel">
       <div className="panel-toolbar">
-        <Typography.Title level={4}>Jobs</Typography.Title>
-        <Button icon={<ReloadOutlined />} onClick={onRefresh} loading={loading} />
+        <div>
+          <Typography.Title level={4}>任务</Typography.Title>
+          <Typography.Text type="secondary">{jobs.length} 个 LaunchAgent</Typography.Text>
+        </div>
+        <Tooltip title="刷新">
+          <Button icon={<ReloadOutlined />} onClick={onRefresh} loading={loading} />
+        </Tooltip>
       </div>
-      <Table
-        rowKey="id"
-        size="middle"
-        loading={loading}
-        columns={columns}
-        dataSource={jobs}
-        pagination={false}
-        rowClassName={(job) => (job.id === selectedId ? "selected-row" : "")}
-        onRow={(job) => ({ onClick: () => onSelect(job) })}
-        scroll={{ x: 760 }}
-      />
+      <div className="job-search">
+        <Input
+          allowClear
+          prefix={<SearchOutlined />}
+          placeholder="搜索名称、命令或 label"
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+        />
+      </div>
+
+      {filteredJobs.length === 0 && !loading ? (
+        <div className="jobs-empty">
+          <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={query ? "没有匹配的任务" : "暂无任务"} />
+        </div>
+      ) : (
+        <div className="job-list" aria-busy={loading}>
+          {filteredJobs.map((job) => (
+            <div
+              key={job.id}
+              className={`job-card ${job.id === selectedId ? "selected" : ""}`}
+              role="button"
+              tabIndex={0}
+              onClick={() => onSelect(job)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault();
+                  onSelect(job);
+                }
+              }}
+            >
+              <div className="job-card-head">
+                <div className="job-title-block">
+                  <Typography.Text strong ellipsis>
+                    {job.name}
+                  </Typography.Text>
+                  <Typography.Text type="secondary" ellipsis className="mono-subtle">
+                    {job.label}
+                  </Typography.Text>
+                </div>
+                <Tag color={statusColor[job.status]}>{statusLabel(job.status)}</Tag>
+              </div>
+
+              <div className="job-card-body">
+                <div className="job-card-line">
+                  <span>计划</span>
+                  <strong>{scheduleSummary(job.schedule)}</strong>
+                </div>
+                <div className="job-card-line">
+                  <span>命令</span>
+                  <strong>{commandSummary(job.execution)}</strong>
+                </div>
+              </div>
+
+              <div className="job-card-actions" onClick={(event) => event.stopPropagation()}>
+                <Switch
+                  size="small"
+                  checked={job.status === "enabled"}
+                  loading={busyId === job.id}
+                  onChange={(checked) => onToggle(job, checked)}
+                />
+                <Space size={4} className="row-actions">
+                  <Tooltip title="立即运行">
+                    <Button size="small" icon={<PlayCircleOutlined />} loading={busyId === job.id} onClick={() => onRun(job)} />
+                  </Tooltip>
+                  <Tooltip title="编辑">
+                    <Button size="small" icon={<EditOutlined />} onClick={() => onEdit(job)} />
+                  </Tooltip>
+                  <Popconfirm title="删除这个任务？" okText="删除" cancelText="取消" okButtonProps={{ danger: true }} onConfirm={() => onDelete(job)}>
+                    <Button size="small" danger icon={<DeleteOutlined />} />
+                  </Popconfirm>
+                </Space>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

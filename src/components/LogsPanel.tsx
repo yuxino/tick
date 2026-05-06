@@ -1,9 +1,10 @@
 import { ClearOutlined, ReloadOutlined } from "@ant-design/icons";
 import CodeMirror from "@uiw/react-codemirror";
-import { Alert, Button, Popconfirm, Space, Switch, Tabs, Typography } from "antd";
+import { Alert, Button, Popconfirm, Space, Switch, Tabs, Tooltip, Typography } from "antd";
 import { useCallback, useEffect, useState } from "react";
 import { clearLaunchdLog, readLaunchdLog } from "../services/launchd";
 import type { JobLog, LaunchdJob, LogKind } from "../types/launchd";
+import { friendlyError } from "../utils/errors";
 
 interface LogsPanelProps {
   job?: LaunchdJob;
@@ -13,7 +14,7 @@ export function LogsPanel({ job }: LogsPanelProps) {
   const [kind, setKind] = useState<LogKind>("stdout");
   const [log, setLog] = useState<JobLog>();
   const [loading, setLoading] = useState(false);
-  const [autoRefresh, setAutoRefresh] = useState(false);
+  const [autoRefresh, setAutoRefresh] = useState(true);
   const [error, setError] = useState<string>();
 
   const loadLog = useCallback(async () => {
@@ -23,7 +24,7 @@ export function LogsPanel({ job }: LogsPanelProps) {
     try {
       setLog(await readLaunchdLog(job.id, kind));
     } catch (err) {
-      setError(String(err));
+      setError(friendlyError(err));
     } finally {
       setLoading(false);
     }
@@ -47,11 +48,11 @@ export function LogsPanel({ job }: LogsPanelProps) {
   }
 
   if (!job) {
-    return <div className="empty-detail">Select a job to inspect logs.</div>;
+    return <div className="empty-detail">选择一个任务查看日志。</div>;
   }
 
   return (
-    <Space direction="vertical" size={12} className="full-width">
+    <Space orientation="vertical" size={12} className="full-width">
       <div className="panel-toolbar compact">
         <Tabs
           activeKey={kind}
@@ -62,17 +63,21 @@ export function LogsPanel({ job }: LogsPanelProps) {
           ]}
         />
         <Space>
-          <Typography.Text type="secondary">Auto</Typography.Text>
+          <Typography.Text type="secondary">自动刷新</Typography.Text>
           <Switch size="small" checked={autoRefresh} onChange={setAutoRefresh} />
-          <Button icon={<ReloadOutlined />} onClick={loadLog} loading={loading} />
-          <Popconfirm title="Clear this log?" okText="Clear" onConfirm={handleClear}>
-            <Button icon={<ClearOutlined />} />
+          <Tooltip title="刷新日志">
+            <Button icon={<ReloadOutlined />} onClick={loadLog} loading={loading} />
+          </Tooltip>
+          <Popconfirm title="清空这份日志？" okText="清空" cancelText="取消" onConfirm={handleClear}>
+            <Tooltip title="清空日志">
+              <Button icon={<ClearOutlined />} />
+            </Tooltip>
           </Popconfirm>
         </Space>
       </div>
 
-      {error && <Alert type="error" message={error} showIcon />}
-      {log?.truncated && <Alert type="warning" message="Showing the tail of a large log file." showIcon />}
+      {error && <Alert type="error" title={error} showIcon />}
+      {log?.truncated && <Alert type="warning" title="日志文件太大，当前只显示末尾内容。" showIcon />}
 
       <Typography.Text type="secondary" className="path-line">
         {log?.path ?? (kind === "stdout" ? job.stdoutPath : job.stderrPath)}

@@ -3,7 +3,7 @@ use std::path::PathBuf;
 pub const LABEL_PREFIX: &str = "com.gavin.tick.";
 
 pub fn home_dir() -> Result<PathBuf, String> {
-    dirs::home_dir().ok_or_else(|| "Unable to resolve home directory".to_string())
+    dirs::home_dir().ok_or_else(|| "无法定位用户主目录".to_string())
 }
 
 pub fn launch_agents_dir() -> Result<PathBuf, String> {
@@ -13,7 +13,7 @@ pub fn launch_agents_dir() -> Result<PathBuf, String> {
 pub fn app_data_dir() -> Result<PathBuf, String> {
     dirs::data_dir()
         .map(|dir| dir.join("tick"))
-        .ok_or_else(|| "Unable to resolve app data directory".to_string())
+        .ok_or_else(|| "无法定位应用数据目录".to_string())
 }
 
 pub fn registry_path() -> Result<PathBuf, String> {

@@ -75,16 +75,23 @@ fn write_inline_script(job: &LaunchdJob) -> Result<Option<PathBuf>, String> {
     if job.execution.mode != ExecutionMode::InlineShell {
         return Ok(None);
     }
-    let path = scripts_dir()?.join(format!("{}.sh", job.id));
-    fs::write(&path, normalize_script(&job.execution.inline_script))
-        .map_err(|err| err.to_string())?;
+    let extension = if job.execution.interpreter.contains("node") {
+        "js"
+    } else {
+        "sh"
+    };
+    let path = scripts_dir()?.join(format!("{}.{}", job.id, extension));
+    fs::write(&path, normalize_script(job)).map_err(|err| err.to_string())?;
     make_executable(&path)?;
     Ok(Some(path))
 }
 
-fn normalize_script(script: &str) -> String {
+fn normalize_script(job: &LaunchdJob) -> String {
+    let script = &job.execution.inline_script;
     if script.starts_with("#!") {
         format!("{script}\n")
+    } else if job.execution.interpreter.contains("node") {
+        format!("#!/usr/bin/env node\n{script}\n")
     } else {
         format!("#!/bin/sh\n{script}\n")
     }
@@ -97,14 +104,14 @@ fn command_args(
     let extra_args = parse_arguments(&job.execution.arguments)?;
     match job.execution.mode {
         ExecutionMode::InlineShell => {
-            let script =
-                inline_script_path.ok_or_else(|| "Inline script path missing".to_string())?;
-            let interpreter = if job.execution.interpreter.trim().is_empty() {
-                "/bin/sh"
+            let script = inline_script_path.ok_or_else(|| "缺少内联脚本路径".to_string())?;
+            let interpreter_parts = if job.execution.interpreter.trim().is_empty() {
+                vec!["/bin/sh".to_string()]
             } else {
-                job.execution.interpreter.trim()
+                parse_arguments(&job.execution.interpreter)?
             };
-            let mut args = vec![interpreter.to_string(), script.display().to_string()];
+            let mut args = interpreter_parts;
+            args.push(script.display().to_string());
             args.extend(extra_args);
             Ok(args)
         }
@@ -245,6 +252,11 @@ pub fn remove_job_files(job: &LaunchdJob) {
             .unwrap_or_default(),
     );
     let _ = fs::remove_file(
+        scripts_dir()
+            .map(|dir| dir.join(format!("{}.js", job.id)))
+            .unwrap_or_default(),
+    );
+    let _ = fs::remove_file(
         wrappers_dir()
             .map(|dir| dir.join(format!("{}.sh", job.id)))
             .unwrap_or_default(),
@@ -320,6 +332,22 @@ mod tests {
         assert_eq!(
             parse_arguments("--name \"hello world\"").unwrap(),
             vec!["--name".to_string(), "hello world".to_string()]
+        );
+    }
+
+    #[test]
+    fn inline_interpreter_can_include_arguments() {
+        let mut job = job(ScheduleMode::Calendar, 0, 30);
+        job.execution.interpreter = "/usr/bin/env node".to_string();
+        let script = PathBuf::from("/tmp/tick-inline.js");
+
+        assert_eq!(
+            command_args(&job, Some(&script)).unwrap(),
+            vec![
+                "/usr/bin/env".to_string(),
+                "node".to_string(),
+                "/tmp/tick-inline.js".to_string()
+            ]
         );
     }
 }

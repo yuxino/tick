@@ -2,51 +2,51 @@ use super::models::{ExecutionMode, LaunchdJobInput, ScheduleMode};
 
 pub fn validate_job_input(input: &LaunchdJobInput) -> Result<(), String> {
     if input.name.trim().is_empty() {
-        return Err("Name is required".to_string());
+        return Err("请输入名称".to_string());
     }
 
     match input.schedule.mode {
         ScheduleMode::Calendar => {
             if let Some(month) = input.schedule.calendar.month {
                 if !(1..=12).contains(&month) {
-                    return Err("Month must be between 1 and 12".to_string());
+                    return Err("月份必须在 1 到 12 之间".to_string());
                 }
             }
             if let Some(day) = input.schedule.calendar.day {
                 if !(1..=31).contains(&day) {
-                    return Err("Day must be between 1 and 31".to_string());
+                    return Err("日期必须在 1 到 31 之间".to_string());
                 }
             }
             if let Some(hour) = input.schedule.calendar.hour {
                 if hour > 23 {
-                    return Err("Hour must be between 0 and 23".to_string());
+                    return Err("小时必须在 0 到 23 之间".to_string());
                 }
             }
             if let Some(minute) = input.schedule.calendar.minute {
                 if minute > 59 {
-                    return Err("Minute must be between 0 and 59".to_string());
+                    return Err("分钟必须在 0 到 59 之间".to_string());
                 }
             }
             if input.schedule.calendar.second > 59 {
-                return Err("Second must be between 0 and 59".to_string());
+                return Err("秒必须在 0 到 59 之间".to_string());
             }
         }
         ScheduleMode::Interval => {
             if input.schedule.interval.seconds == 0 {
-                return Err("Interval must be at least 1 second".to_string());
+                return Err("间隔至少 1 秒".to_string());
             }
         }
     }
 
     match input.execution.mode {
         ExecutionMode::InlineShell if input.execution.inline_script.trim().is_empty() => {
-            Err("Inline shell script is required".to_string())
+            Err("请输入脚本内容".to_string())
         }
         ExecutionMode::ScriptPath if input.execution.script_path.trim().is_empty() => {
-            Err("Script path is required".to_string())
+            Err("请输入脚本路径".to_string())
         }
         ExecutionMode::Interpreter if input.execution.interpreter.trim().is_empty() => {
-            Err("Interpreter is required".to_string())
+            Err("请输入解释器路径".to_string())
         }
         _ => Ok(()),
     }
@@ -79,7 +79,7 @@ mod tests {
                 mode: ExecutionMode::InlineShell,
                 inline_script: "echo ok".to_string(),
                 script_path: "".to_string(),
-                interpreter: "/bin/sh".to_string(),
+                interpreter: "/usr/bin/env node".to_string(),
                 arguments: "".to_string(),
                 working_directory: "".to_string(),
                 environment: vec![],
@@ -96,10 +96,7 @@ mod tests {
     fn rejects_empty_name() {
         let mut input = valid_input();
         input.name = "   ".to_string();
-        assert_eq!(
-            validate_job_input(&input),
-            Err("Name is required".to_string())
-        );
+        assert_eq!(validate_job_input(&input), Err("请输入名称".to_string()));
     }
 
     #[test]
@@ -108,7 +105,7 @@ mod tests {
         input.schedule.calendar.second = 60;
         assert_eq!(
             validate_job_input(&input),
-            Err("Second must be between 0 and 59".to_string())
+            Err("秒必须在 0 到 59 之间".to_string())
         );
     }
 
@@ -117,10 +114,7 @@ mod tests {
         let mut input = valid_input();
         input.schedule.mode = ScheduleMode::Interval;
         input.schedule.interval.seconds = 0;
-        assert_eq!(
-            validate_job_input(&input),
-            Err("Interval must be at least 1 second".to_string())
-        );
+        assert_eq!(validate_job_input(&input), Err("间隔至少 1 秒".to_string()));
     }
 
     #[test]
@@ -129,7 +123,7 @@ mod tests {
         input.execution.inline_script = " ".to_string();
         assert_eq!(
             validate_job_input(&input),
-            Err("Inline shell script is required".to_string())
+            Err("请输入脚本内容".to_string())
         );
     }
 }
