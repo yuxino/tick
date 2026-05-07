@@ -6,8 +6,10 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { JobFormModal } from "./components/JobFormModal";
 import { JobsTable } from "./components/JobsTable";
 import { LogsPanel } from "./components/LogsPanel";
+import { MikuMascot } from "./components/MikuMascot";
 import { PlistPanel } from "./components/PlistPanel";
 import { ScriptDebugPanel } from "./components/ScriptDebugPanel";
+import { tickEditorTheme } from "./editorTheme";
 import {
   deleteLaunchdJob,
   disableLaunchdJob,
@@ -149,20 +151,23 @@ function App() {
   return (
     <Layout className="app-shell">
       <Header className="app-header">
+        <div className="window-drag-region" data-tauri-drag-region />
         <div className="brand-block">
           <div className="app-title">Tick</div>
         </div>
-        <div className="header-stats" aria-label="任务状态概览">
-          <StatusPill label="全部" value={stats.total} />
-          <StatusPill label="运行中" value={stats.enabled} tone="good" />
-          <StatusPill label="停用" value={stats.disabled} />
-          <StatusPill label="异常" value={stats.issues} tone={stats.issues > 0 ? "warn" : "quiet"} />
+        <div className="header-controls">
+          <div className="header-stats" aria-label="任务状态概览">
+            <StatusPill label="全部" value={stats.total} />
+            <StatusPill label="运行中" value={stats.enabled} tone="good" />
+            <StatusPill label="停用" value={stats.disabled} />
+            <StatusPill label="异常" value={stats.issues} tone={stats.issues > 0 ? "warn" : "quiet"} />
+          </div>
+          <Space className="header-actions">
+            <Button icon={<PlusOutlined />} type="primary" onClick={openCreate}>
+              新建任务
+            </Button>
+          </Space>
         </div>
-        <Space className="header-actions">
-          <Button icon={<PlusOutlined />} type="primary" onClick={openCreate}>
-            新建任务
-          </Button>
-        </Space>
       </Header>
 
       <Content className="app-content">
@@ -213,6 +218,7 @@ function App() {
         }}
         onSubmit={handleSave}
       />
+      <MikuMascot />
     </Layout>
   );
 }
@@ -304,7 +310,7 @@ function QuickScriptCreator({
         <CodeMirror
           value={script}
           height="300px"
-          extensions={[javascript({ jsx: true, typescript: true })]}
+          extensions={[tickEditorTheme, javascript({ jsx: true, typescript: true })]}
           basicSetup={{ lineNumbers: true, foldGutter: true }}
           onChange={setScript}
         />

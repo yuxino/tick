@@ -3,6 +3,7 @@ import { xml } from "@codemirror/lang-xml";
 import CodeMirror from "@uiw/react-codemirror";
 import { Alert, Button, Space, Tooltip, Typography } from "antd";
 import { useCallback, useEffect, useState } from "react";
+import { tickEditorTheme } from "../editorTheme";
 import { readLaunchdPlist } from "../services/launchd";
 import type { LaunchdJob } from "../types/launchd";
 import { friendlyError } from "../utils/errors";
@@ -50,7 +51,7 @@ export function PlistPanel({ job }: PlistPanelProps) {
         </Tooltip>
       </div>
       {error && <Alert type="error" title={error} showIcon />}
-      <CodeMirror value={content} height="480px" extensions={[xml()]} editable={false} basicSetup={{ lineNumbers: true }} />
+      <CodeMirror value={content} height="480px" extensions={[tickEditorTheme, xml()]} editable={false} basicSetup={{ lineNumbers: true }} />
     </Space>
   );
 }

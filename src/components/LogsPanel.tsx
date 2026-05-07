@@ -3,6 +3,7 @@ import CodeMirror from "@uiw/react-codemirror";
 import { Alert, Button, Popconfirm, Space, Switch, Tabs, Tooltip, Typography } from "antd";
 import { useCallback, useEffect, useState } from "react";
 import { clearLaunchdLog, readLaunchdLog } from "../services/launchd";
+import { tickEditorTheme } from "../editorTheme";
 import type { JobLog, LaunchdJob, LogKind } from "../types/launchd";
 import { friendlyError } from "../utils/errors";
 
@@ -85,6 +86,7 @@ export function LogsPanel({ job }: LogsPanelProps) {
       <CodeMirror
         value={log?.content ?? ""}
         height="420px"
+        extensions={[tickEditorTheme]}
         editable={false}
         basicSetup={{ lineNumbers: true, foldGutter: false }}
       />

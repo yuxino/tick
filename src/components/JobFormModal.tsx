@@ -10,6 +10,7 @@ import type { ExecutionMode, LaunchdExecution, LaunchdJobInput, LaunchdSchedule 
 import { generateNodeScript, runNodeScriptDebug } from "../services/launchd";
 import type { RunNodeScriptDebugResponse } from "../services/launchd";
 import { ScriptDebugPanel } from "./ScriptDebugPanel";
+import { tickEditorTheme } from "../editorTheme";
 import { friendlyError } from "../utils/errors";
 import { defaultExecution, defaultSchedule, emptyJobInput } from "../utils/launchd";
 
@@ -32,7 +33,7 @@ export function JobFormModal({ open, initialValue, saving, onCancel, onSubmit }:
   const inlineScript = Form.useWatch(["execution", "inlineScript"], form) as string | undefined;
   const workingDirectory = Form.useWatch(["execution", "workingDirectory"], form) as string | undefined;
 
-  const extensions = useMemo(() => [javascript({ jsx: true, typescript: true })], []);
+  const extensions = useMemo(() => [tickEditorTheme, javascript({ jsx: true, typescript: true })], []);
 
   useEffect(() => {
     if (open) {
@@ -589,4 +590,3 @@ function yearlyDateInputValue(schedule: LaunchdSchedule) {
 function pad(value: number) {
   return String(value).padStart(2, "0");
 }
-
