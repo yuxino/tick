@@ -1,4 +1,15 @@
-import { DeleteOutlined, EditOutlined, FileTextOutlined, PlayCircleOutlined, PlusOutlined, RobotOutlined } from "@ant-design/icons";
+import {
+  CalendarOutlined,
+  ClockCircleOutlined,
+  DeleteOutlined,
+  EditOutlined,
+  LeftOutlined,
+  PlayCircleOutlined,
+  PlusOutlined,
+  RightOutlined,
+  RobotOutlined,
+  UnorderedListOutlined,
+} from "@ant-design/icons";
 import { javascript } from "@codemirror/lang-javascript";
 import CodeMirror from "@uiw/react-codemirror";
 import { Alert, Button, Descriptions, Input, Layout, message, Popconfirm, Space, Switch, Tabs, Tag, Typography } from "antd";
@@ -6,9 +17,10 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { JobFormModal } from "./components/JobFormModal";
 import { JobsTable } from "./components/JobsTable";
 import { LogsPanel } from "./components/LogsPanel";
-import { MikuMascot } from "./components/MikuMascot";
+import tickMascot from "./assets/tick-mascot.png";
 import { PlistPanel } from "./components/PlistPanel";
 import { ScriptDebugPanel } from "./components/ScriptDebugPanel";
+import { TickMascot } from "./components/TickMascot";
 import { tickEditorTheme } from "./editorTheme";
 import {
   deleteLaunchdJob,
@@ -24,8 +36,10 @@ import type { RunNodeScriptDebugResponse } from "./services/launchd";
 import type { LaunchdJob, LaunchdJobInput } from "./types/launchd";
 import { friendlyError } from "./utils/errors";
 import { commandSummary, emptyJobInput, scheduleSummary, statusLabel, toJobInput } from "./utils/launchd";
+import { displayPath } from "./utils/paths";
 
 const { Header, Content } = Layout;
+type MainView = "tasks" | "schedule";
 
 function App() {
   const [jobs, setJobs] = useState<LaunchdJob[]>([]);
@@ -36,21 +50,12 @@ function App() {
   const [error, setError] = useState<string>();
   const [formOpen, setFormOpen] = useState(false);
   const [editingJob, setEditingJob] = useState<LaunchdJob>();
+  const [activeView, setActiveView] = useState<MainView>("tasks");
 
   const selectedJob = useMemo(
     () => jobs.find((job) => job.id === selectedId) ?? jobs[0],
     [jobs, selectedId],
   );
-  const stats = useMemo(
-    () => ({
-      total: jobs.length,
-      enabled: jobs.filter((job) => job.status === "enabled").length,
-      disabled: jobs.filter((job) => job.status === "disabled").length,
-      issues: jobs.filter((job) => job.status === "missing" || job.status === "error").length,
-    }),
-    [jobs],
-  );
-
   const loadJobs = useCallback(async () => {
     setLoading(true);
     setError(undefined);
@@ -153,14 +158,34 @@ function App() {
       <Header className="app-header">
         <div className="window-drag-region" data-tauri-drag-region />
         <div className="brand-block">
-          <div className="app-title">Tick</div>
+          <img className="brand-mark" src={tickMascot} alt="" />
+          <div>
+            <div className="app-title">Tick</div>
+            <div className="app-subtitle">把 LaunchAgent 变得看得见</div>
+          </div>
         </div>
         <div className="header-controls">
-          <div className="header-stats" aria-label="任务状态概览">
-            <StatusPill label="全部" value={stats.total} />
-            <StatusPill label="运行中" value={stats.enabled} tone="good" />
-            <StatusPill label="停用" value={stats.disabled} />
-            <StatusPill label="异常" value={stats.issues} tone={stats.issues > 0 ? "warn" : "quiet"} />
+          <div className="view-switch" role="tablist" aria-label="主视图">
+            <button
+              type="button"
+              className={activeView === "tasks" ? "active" : ""}
+              role="tab"
+              aria-selected={activeView === "tasks"}
+              onClick={() => setActiveView("tasks")}
+            >
+              <UnorderedListOutlined />
+              任务
+            </button>
+            <button
+              type="button"
+              className={activeView === "schedule" ? "active" : ""}
+              role="tab"
+              aria-selected={activeView === "schedule"}
+              onClick={() => setActiveView("schedule")}
+            >
+              <CalendarOutlined />
+              日程
+            </button>
           </div>
           <Space className="header-actions">
             <Button icon={<PlusOutlined />} type="primary" onClick={openCreate}>
@@ -173,7 +198,16 @@ function App() {
       <Content className="app-content">
         {error && <Alert type="error" title={error} showIcon className="top-alert" />}
 
-        {jobs.length === 0 && !loading ? (
+        {activeView === "schedule" ? (
+          <ScheduleCalendar
+            jobs={jobs}
+            loading={loading}
+            onOpenJob={(job) => {
+              setSelectedId(job.id);
+              setActiveView("tasks");
+            }}
+          />
+        ) : jobs.length === 0 && !loading ? (
           <QuickScriptCreator saving={saving} onSubmit={handleQuickScriptSave} onAdvanced={openCreate} />
         ) : (
           <div className="workspace">
@@ -218,7 +252,6 @@ function App() {
         }}
         onSubmit={handleSave}
       />
-      <MikuMascot />
     </Layout>
   );
 }
@@ -295,11 +328,16 @@ function QuickScriptCreator({
   return (
     <div className="quick-create-shell">
       <div className="quick-create-copy">
-        <Typography.Text type="secondary">Neon Node Atelier</Typography.Text>
-        <Typography.Title level={2}>直接写 Node.js，Tick 来定时跑</Typography.Title>
+        <TickMascot />
+        <span className="eyebrow">YOUR FIRST LAUNCHAGENT</span>
+        <Typography.Title level={2}>从一段脚本开始，认识 macOS 定时任务</Typography.Title>
         <Typography.Paragraph type="secondary">
-          默认每天运行一次。AI 帮你起草脚本，调试面板先听一遍输出，再保存成 macOS 定时任务。
+          写下脚本和运行时间，Tick 会替你生成 plist、交给 launchd，并把每次运行的输出留在这里。
         </Typography.Paragraph>
+        <div className="learning-note">
+          <ClockCircleOutlined />
+          <span>创建后可以直接查看生成的 plist，理解 LaunchAgent 到底做了什么。</span>
+        </div>
       </div>
 
       <div className="quick-create-panel panel">
@@ -348,12 +386,99 @@ function QuickScriptCreator({
 
 const DEFAULT_NODE_SCRIPT = `console.log("tick", new Date().toLocaleString());`;
 
-function StatusPill({ label, value, tone = "quiet" }: { label: string; value: number; tone?: "quiet" | "good" | "warn" }) {
+function ScheduleCalendar({
+  jobs,
+  loading,
+  onOpenJob,
+}: {
+  jobs: LaunchdJob[];
+  loading: boolean;
+  onOpenJob: (job: LaunchdJob) => void;
+}) {
+  const [visibleMonth, setVisibleMonth] = useState(() => monthKey(new Date()));
+  const todayKey = dateKey(new Date());
+  const days = useMemo(() => monthGrid(visibleMonth), [visibleMonth]);
+  const monthDate = parseMonthKey(visibleMonth);
+  const activeJobs = jobs.filter((job) => job.status === "enabled").length;
+  const monthRuns = days
+    .filter((day) => monthKey(day) === visibleMonth)
+    .reduce((sum, day) => sum + jobsForDate(jobs, day).filter((job) => job.status === "enabled").length, 0);
+
+  function moveMonth(offset: number) {
+    const next = parseMonthKey(visibleMonth);
+    next.setMonth(next.getMonth() + offset);
+    setVisibleMonth(monthKey(next));
+  }
+
   return (
-    <div className={`status-pill ${tone}`}>
-      <span>{label}</span>
-      <strong>{value}</strong>
-    </div>
+    <section className="schedule-shell">
+      <div className="schedule-board panel">
+        <div className="schedule-toolbar">
+          <div className="schedule-heading">
+            <Typography.Text type="secondary">日程视图</Typography.Text>
+            <Typography.Title level={3}>{monthDate.toLocaleDateString("zh-CN", { year: "numeric", month: "long" })}</Typography.Title>
+          </div>
+          <div className="schedule-toolbar-actions">
+            <Button icon={<LeftOutlined />} onClick={() => moveMonth(-1)} aria-label="上个月" />
+            <Button onClick={() => setVisibleMonth(monthKey(new Date()))}>今天</Button>
+            <Button icon={<RightOutlined />} onClick={() => moveMonth(1)} aria-label="下个月" />
+          </div>
+        </div>
+
+        <div className="schedule-summary-row">
+          <InfoTile label="启用任务" value={`${activeJobs} 个`} />
+          <InfoTile label="本月预计运行" value={`${monthRuns} 次`} />
+          <InfoTile label="可见范围" value="按天聚合" />
+        </div>
+
+        <div className="calendar-weekdays" aria-hidden="true">
+          {["周一", "周二", "周三", "周四", "周五", "周六", "周日"].map((day) => (
+            <span key={day}>{day}</span>
+          ))}
+        </div>
+
+        <div className="calendar-grid" aria-busy={loading}>
+          {days.map((day) => {
+            const key = dateKey(day);
+            const dayJobs = jobsForDate(jobs, day);
+            const visibleJobs = dayJobs.slice(0, 4);
+            const isMuted = monthKey(day) !== visibleMonth;
+            const isToday = key === todayKey;
+
+            return (
+              <div key={key} className={`calendar-day ${isMuted ? "muted" : ""} ${isToday ? "today" : ""}`}>
+                <div className="calendar-day-head">
+                  <strong>{day.getDate()}</strong>
+                  {isToday ? <Tag color="green">今天</Tag> : null}
+                </div>
+
+                <div className="calendar-events">
+                  {visibleJobs.length > 0 ? (
+                    visibleJobs.map((job) => (
+                      <button
+                        key={job.id}
+                        type="button"
+                        className={`calendar-event ${job.status === "enabled" ? "enabled" : "disabled"}`}
+                        onClick={() => onOpenJob(job)}
+                      >
+                        <span className="calendar-event-time">
+                          <ClockCircleOutlined />
+                          {runTimeLabel(job)}
+                        </span>
+                        <span className="calendar-event-name">{job.name}</span>
+                      </button>
+                    ))
+                  ) : (
+                    <span className="calendar-empty">无运行</span>
+                  )}
+                  {dayJobs.length > visibleJobs.length ? <span className="calendar-more">+{dayJobs.length - visibleJobs.length}</span> : null}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </section>
   );
 }
 
@@ -403,9 +528,6 @@ function DetailPanel({
           />
           <Button icon={<PlayCircleOutlined />} loading={busy} onClick={() => onRun(job)}>
             立即运行
-          </Button>
-          <Button icon={<FileTextOutlined />} onClick={() => setActiveTab("logs")}>
-            查看日志
           </Button>
           <Button icon={<EditOutlined />} onClick={() => onEdit(job)}>
             编辑
@@ -471,24 +593,96 @@ function OverviewPanel({ job }: { job: LaunchdJob }) {
           </Typography.Text>
         </Descriptions.Item>
         <Descriptions.Item label="plist 配置">
-          <Typography.Text copyable className="path-line">
-            {job.plistPath}
+          <Typography.Text copyable={{ text: job.plistPath }} className="path-line" title={job.plistPath}>
+            {displayPath(job.plistPath)}
           </Typography.Text>
         </Descriptions.Item>
         <Descriptions.Item label="标准输出">
-          <Typography.Text copyable className="path-line">
-            {job.stdoutPath}
+          <Typography.Text copyable={{ text: job.stdoutPath }} className="path-line" title={job.stdoutPath}>
+            {displayPath(job.stdoutPath)}
           </Typography.Text>
         </Descriptions.Item>
         <Descriptions.Item label="标准错误">
-          <Typography.Text copyable className="path-line">
-            {job.stderrPath}
+          <Typography.Text copyable={{ text: job.stderrPath }} className="path-line" title={job.stderrPath}>
+            {displayPath(job.stderrPath)}
           </Typography.Text>
         </Descriptions.Item>
         <Descriptions.Item label="更新时间">{new Date(job.lastModifiedAt).toLocaleString("zh-CN")}</Descriptions.Item>
       </Descriptions>
     </Space>
   );
+}
+
+function jobsForDate(jobs: LaunchdJob[], date: Date) {
+  return jobs
+    .filter((job) => jobMatchesDate(job, date))
+    .sort((a, b) => {
+      if (a.status !== b.status) return a.status === "enabled" ? -1 : 1;
+      return runSortValue(a) - runSortValue(b);
+    });
+}
+
+function jobMatchesDate(job: LaunchdJob, date: Date) {
+  if (job.status === "missing" || job.status === "error") {
+    return false;
+  }
+
+  if (job.schedule.mode === "interval") {
+    return true;
+  }
+
+  const { month, day } = job.schedule.calendar;
+  const currentMonth = date.getMonth() + 1;
+  const currentDay = date.getDate();
+
+  if (month && month !== currentMonth) return false;
+  if (day && day !== currentDay) return false;
+  return true;
+}
+
+function runTimeLabel(job: LaunchdJob) {
+  if (job.schedule.mode === "interval") {
+    return `每 ${job.schedule.interval.seconds} 秒`;
+  }
+
+  const { hour = 0, minute = 0, second = 0 } = job.schedule.calendar;
+  return `${padNumber(hour)}:${padNumber(minute)}:${padNumber(second)}`;
+}
+
+function runSortValue(job: LaunchdJob) {
+  if (job.schedule.mode === "interval") return -1;
+  const { hour = 0, minute = 0, second = 0 } = job.schedule.calendar;
+  return hour * 3600 + minute * 60 + second;
+}
+
+function monthGrid(value: string) {
+  const first = parseMonthKey(value);
+  const mondayOffset = (first.getDay() + 6) % 7;
+  const start = addDays(first, -mondayOffset);
+  return Array.from({ length: 42 }, (_, index) => addDays(start, index));
+}
+
+function parseMonthKey(value: string) {
+  const [year, month] = value.split("-").map(Number);
+  return new Date(year, (month || 1) - 1, 1);
+}
+
+function addDays(date: Date, days: number) {
+  const next = new Date(date);
+  next.setDate(next.getDate() + days);
+  return next;
+}
+
+function monthKey(date: Date) {
+  return `${date.getFullYear()}-${padNumber(date.getMonth() + 1)}`;
+}
+
+function dateKey(date: Date) {
+  return `${monthKey(date)}-${padNumber(date.getDate())}`;
+}
+
+function padNumber(value: number) {
+  return String(value).padStart(2, "0");
 }
 
 export default App;

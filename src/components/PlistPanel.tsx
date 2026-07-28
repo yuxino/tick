@@ -7,6 +7,7 @@ import { tickEditorTheme } from "../editorTheme";
 import { readLaunchdPlist } from "../services/launchd";
 import type { LaunchdJob } from "../types/launchd";
 import { friendlyError } from "../utils/errors";
+import { displayPath } from "../utils/paths";
 
 interface PlistPanelProps {
   job?: LaunchdJob;
@@ -44,7 +45,7 @@ export function PlistPanel({ job }: PlistPanelProps) {
     <Space orientation="vertical" size={12} className="full-width">
       <div className="panel-toolbar compact">
         <Typography.Text type="secondary" className="path-line">
-          {job.plistPath}
+          {displayPath(job.plistPath)}
         </Typography.Text>
         <Tooltip title="刷新 plist">
           <Button icon={<ReloadOutlined />} onClick={loadPlist} loading={loading} />
