@@ -1,11 +1,9 @@
 import {
-  DeleteOutlined,
-  EditOutlined,
   PlayCircleOutlined,
   ReloadOutlined,
   SearchOutlined,
 } from "@ant-design/icons";
-import { Button, Empty, Input, Popconfirm, Space, Switch, Tag, Tooltip, Typography } from "antd";
+import { Button, Empty, Input, Switch, Tag, Tooltip, Typography } from "antd";
 import { useMemo, useState } from "react";
 import type { LaunchdJob } from "../types/launchd";
 import { commandSummary, scheduleSummary, statusLabel } from "../utils/launchd";
@@ -36,10 +34,8 @@ export function JobsTable({
   loading,
   busyId,
   onSelect,
-  onEdit,
   onToggle,
   onRun,
-  onDelete,
   onRefresh,
 }: JobsTableProps) {
   const [query, setQuery] = useState("");
@@ -107,35 +103,19 @@ export function JobsTable({
                 <Tag color={statusColor[job.status]}>{statusLabel(job.status)}</Tag>
               </div>
 
-              <div className="job-card-body">
-                <div className="job-card-line">
-                  <span>计划</span>
-                  <strong>{scheduleSummary(job.schedule)}</strong>
-                </div>
-                <div className="job-card-line">
-                  <span>命令</span>
-                  <strong>{commandSummary(job.execution)}</strong>
-                </div>
-              </div>
-
               <div className="job-card-actions" onClick={(event) => event.stopPropagation()}>
-                <Switch
-                  size="small"
-                  checked={job.status === "enabled"}
-                  loading={busyId === job.id}
-                  onChange={(checked) => onToggle(job, checked)}
-                />
-                <Space size={4} className="row-actions">
+                <span className="job-schedule">{scheduleSummary(job.schedule)}</span>
+                <div className="job-card-controls">
+                  <Switch
+                    size="small"
+                    checked={job.status === "enabled"}
+                    loading={busyId === job.id}
+                    onChange={(checked) => onToggle(job, checked)}
+                  />
                   <Tooltip title="立即运行">
-                    <Button size="small" icon={<PlayCircleOutlined />} loading={busyId === job.id} onClick={() => onRun(job)} />
+                    <Button size="small" type="text" icon={<PlayCircleOutlined />} loading={busyId === job.id} onClick={() => onRun(job)} />
                   </Tooltip>
-                  <Tooltip title="编辑">
-                    <Button size="small" icon={<EditOutlined />} onClick={() => onEdit(job)} />
-                  </Tooltip>
-                  <Popconfirm title="删除这个任务？" okText="删除" cancelText="取消" okButtonProps={{ danger: true }} onConfirm={() => onDelete(job)}>
-                    <Button size="small" danger icon={<DeleteOutlined />} />
-                  </Popconfirm>
-                </Space>
+                </div>
               </div>
             </div>
           ))}

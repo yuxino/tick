@@ -6,6 +6,7 @@ import { clearLaunchdLog, readLaunchdLog } from "../services/launchd";
 import { tickEditorTheme } from "../editorTheme";
 import type { JobLog, LaunchdJob, LogKind } from "../types/launchd";
 import { friendlyError } from "../utils/errors";
+import { displayPath } from "../utils/paths";
 
 interface LogsPanelProps {
   job?: LaunchdJob;
@@ -81,7 +82,7 @@ export function LogsPanel({ job }: LogsPanelProps) {
       {log?.truncated && <Alert type="warning" title="日志文件太大，当前只显示末尾内容。" showIcon />}
 
       <Typography.Text type="secondary" className="path-line">
-        {log?.path ?? (kind === "stdout" ? job.stdoutPath : job.stderrPath)}
+        {displayPath(log?.path ?? (kind === "stdout" ? job.stdoutPath : job.stderrPath))}
       </Typography.Text>
       <CodeMirror
         value={log?.content ?? ""}
