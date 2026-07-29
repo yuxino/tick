@@ -2,9 +2,8 @@ import {
   CheckCircleFilled,
   DeleteOutlined,
   KeyOutlined,
-  InfoCircleOutlined,
 } from "@ant-design/icons";
-import { Alert, Button, Input, Modal, Popconfirm, Space, Tag, Typography, message } from "antd";
+import { Button, Input, Modal, Popconfirm, Space, Tag, Typography, message } from "antd";
 import { useCallback, useEffect, useState } from "react";
 import {
   deleteDeepSeekApiKey,
@@ -109,13 +108,9 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
           )}
         </div>
 
-        <Alert
-          type="info"
-          showIcon
-          icon={<InfoCircleOutlined />}
-          title="保存在这台电脑上"
-          description="保存一次后 Tick 会自动读取。Key 存在仅当前用户可读写的应用设置文件中，不会进入项目源码或日志。"
-        />
+        <Typography.Paragraph type="secondary" className="settings-storage-note">
+          保存后会自动读取。Key 存在当前用户的应用设置目录，不会写入项目源码或日志。
+        </Typography.Paragraph>
 
         <div className="settings-key-row">
           <Input.Password

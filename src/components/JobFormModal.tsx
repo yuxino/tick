@@ -1,4 +1,4 @@
-import { DeleteOutlined, PlayCircleOutlined, PlusOutlined, RobotOutlined } from "@ant-design/icons";
+import { DeleteOutlined, PlayCircleOutlined, PlusOutlined } from "@ant-design/icons";
 import CodeMirror from "@uiw/react-codemirror";
 import { javascript } from "@codemirror/lang-javascript";
 import type { Extension } from "@codemirror/state";
@@ -7,7 +7,7 @@ import type { FormInstance } from "antd";
 import dayjs from "dayjs";
 import { useEffect, useMemo, useState } from "react";
 import type { ExecutionMode, LaunchdExecution, LaunchdJobInput, LaunchdSchedule } from "../types/launchd";
-import { generateNodeScript, runNodeScriptDebug } from "../services/launchd";
+import { runNodeScriptDebug } from "../services/launchd";
 import type { RunNodeScriptDebugResponse } from "../services/launchd";
 import { ScriptDebugPanel } from "./ScriptDebugPanel";
 import { tickEditorTheme } from "../editorTheme";
@@ -150,17 +150,6 @@ export function JobFormModal({ open, initialValue, saving, onCancel, onSubmit, d
     });
   }
 
-  function applyInlineScript(script: string) {
-    form.setFieldsValue({
-      execution: {
-        ...previewExecution,
-        mode: "inline_shell",
-        inlineScript: script,
-        interpreter: "/usr/bin/env node",
-      },
-    });
-  }
-
   function changeExecutionMode(nextMode: ExecutionMode) {
     form.setFieldsValue({
       execution: {
@@ -192,22 +181,19 @@ export function JobFormModal({ open, initialValue, saving, onCancel, onSubmit, d
       cancelText="取消"
       destroyOnHidden
     >
-      {draftSummary && (
+      {draftSummary && <Typography.Paragraph className="automation-draft-summary">{draftSummary}</Typography.Paragraph>}
+      {draftRisks.length > 0 && (
         <Alert
           className="automation-draft-alert"
-          type={draftRisks.length > 0 ? "warning" : "success"}
+          type="warning"
           showIcon
-          title={draftSummary}
+          title="保存前请确认"
           description={
-            draftRisks.length > 0 ? (
-              <ul>
-                {draftRisks.map((risk) => (
-                  <li key={risk}>{risk}</li>
-                ))}
-              </ul>
-            ) : (
-              "没有发现需要额外确认的风险。仍建议先调试运行一次。"
-            )
+            <ul>
+              {draftRisks.map((risk) => (
+                <li key={risk}>{risk}</li>
+              ))}
+            </ul>
           }
         />
       )}
@@ -240,7 +226,7 @@ export function JobFormModal({ open, initialValue, saving, onCancel, onSubmit, d
         <div className="job-form-layout">
           <div className="job-form-main">
             <section className="form-section">
-              <SectionTitle step="1" title="任务信息" />
+              <SectionTitle title="任务信息" />
               <div className="form-grid two">
                 <Form.Item name="name" label="名称" rules={[{ required: true, whitespace: true, message: "请输入名称" }]}>
                   <Input placeholder="每日同步" />
@@ -252,7 +238,7 @@ export function JobFormModal({ open, initialValue, saving, onCancel, onSubmit, d
             </section>
 
             <section className="form-section">
-              <SectionTitle step="2" title="运行时间" />
+              <SectionTitle title="运行时间" />
               <ScheduleComposer
                 preset={schedulePreset}
                 schedule={previewSchedule}
@@ -265,14 +251,13 @@ export function JobFormModal({ open, initialValue, saving, onCancel, onSubmit, d
             </section>
 
             <section className="form-section">
-              <SectionTitle step="3" title="脚本内容" />
+              <SectionTitle title="脚本内容" />
               <ScriptComposer
                 mode={currentExecutionMode}
                 currentScript={inlineScript ?? previewExecution.inlineScript}
                 workingDirectory={workingDirectory}
                 extensions={extensions}
                 onModeChange={changeExecutionMode}
-                onApplyInlineScript={applyInlineScript}
               />
             </section>
 
@@ -388,36 +373,15 @@ function ScriptComposer({
   workingDirectory,
   extensions,
   onModeChange,
-  onApplyInlineScript,
 }: {
   mode: ExecutionMode;
   currentScript: string;
   workingDirectory?: string;
   extensions: Extension[];
   onModeChange: (mode: ExecutionMode) => void;
-  onApplyInlineScript: (script: string) => void;
 }) {
-  const [aiPrompt, setAiPrompt] = useState("");
-  const [generating, setGenerating] = useState(false);
   const [debugging, setDebugging] = useState(false);
   const [debugResult, setDebugResult] = useState<RunNodeScriptDebugResponse>();
-
-  async function handleGenerateScript() {
-    if (!aiPrompt.trim()) {
-      message.warning("先写一句你想让脚本做什么");
-      return;
-    }
-    setGenerating(true);
-    try {
-      const result = await generateNodeScript({ prompt: aiPrompt, currentScript });
-      onApplyInlineScript(result.script);
-      message.success("脚本写好了");
-    } catch (err) {
-      message.error(friendlyError(err));
-    } finally {
-      setGenerating(false);
-    }
-  }
 
   async function handleDebugScript() {
     if (!currentScript.trim()) {
@@ -458,17 +422,6 @@ function ScriptComposer({
             <CodeEditor extensions={extensions} />
           </Form.Item>
 
-          <div className="ai-helper">
-            <Input.TextArea
-              value={aiPrompt}
-              autoSize={{ minRows: 2, maxRows: 4 }}
-              placeholder="描述你想让 Node.js 脚本做什么。比如：发一条 macOS 通知提醒我喝水，并把时间写进日志。"
-              onChange={(event) => setAiPrompt(event.target.value)}
-            />
-            <Button icon={<RobotOutlined />} loading={generating} onClick={handleGenerateScript}>
-              AI 帮我写
-            </Button>
-          </div>
           <div className="debug-toolbar">
             <Button icon={<PlayCircleOutlined />} loading={debugging} onClick={handleDebugScript}>
               调试运行
@@ -568,10 +521,9 @@ function QuickButtonRow<T extends string | number>({ options, onSelect }: { opti
   );
 }
 
-function SectionTitle({ step, title }: { step: string; title: string }) {
+function SectionTitle({ title }: { title: string }) {
   return (
     <div className="section-title">
-      <span>{step}</span>
       <Typography.Title level={5}>{title}</Typography.Title>
     </div>
   );

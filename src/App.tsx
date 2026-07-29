@@ -7,13 +7,10 @@ import {
   PlayCircleOutlined,
   PlusOutlined,
   RightOutlined,
-  RobotOutlined,
   SettingOutlined,
   UnorderedListOutlined,
 } from "@ant-design/icons";
-import { javascript } from "@codemirror/lang-javascript";
-import CodeMirror from "@uiw/react-codemirror";
-import { Alert, Button, Descriptions, Input, Layout, message, Popconfirm, Space, Switch, Tabs, Tag, Typography } from "antd";
+import { Alert, Button, Descriptions, Layout, message, Popconfirm, Space, Switch, Tabs, Tag, Typography } from "antd";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { JobFormModal } from "./components/JobFormModal";
 import { AutomationModal } from "./components/AutomationModal";
@@ -21,20 +18,16 @@ import { JobsTable } from "./components/JobsTable";
 import { LogsPanel } from "./components/LogsPanel";
 import tickMascot from "./assets/tick-mascot.png";
 import { PlistPanel } from "./components/PlistPanel";
-import { ScriptDebugPanel } from "./components/ScriptDebugPanel";
 import { SettingsModal } from "./components/SettingsModal";
-import { TickMascot } from "./components/TickMascot";
-import { tickEditorTheme } from "./editorTheme";
 import {
   deleteLaunchdJob,
   disableLaunchdJob,
   enableLaunchdJob,
   listLaunchdJobs,
-  runNodeScriptDebug,
   runLaunchdJobNow,
   saveLaunchdJob,
 } from "./services/launchd";
-import type { AutomationDraft, RunNodeScriptDebugResponse } from "./services/launchd";
+import type { AutomationDraft } from "./services/launchd";
 import type { LaunchdJob, LaunchdJobInput } from "./types/launchd";
 import { friendlyError } from "./utils/errors";
 import { commandSummary, emptyJobInput, scheduleSummary, statusLabel, toJobInput } from "./utils/launchd";
@@ -118,10 +111,6 @@ function App() {
     }
   }
 
-  async function handleQuickScriptSave(input: LaunchdJobInput) {
-    await handleSave(input);
-  }
-
   async function withBusy(job: LaunchdJob, action: () => Promise<void>, success: string) {
     setBusyId(job.id);
     try {
@@ -173,20 +162,8 @@ function App() {
       <Header className="app-header">
         <div className="window-drag-region" data-tauri-drag-region />
         <div className="brand-block">
-          <div className="brand-sticker" aria-hidden="true">
-            <img className="brand-mark" src={tickMascot} alt="" />
-            <span className="brand-sticker-dot" />
-          </div>
-          <div className="brand-copy">
-            <div className="app-title-row">
-              <div className="app-title">Tick</div>
-              <span className="brand-kicker">准时营业</span>
-            </div>
-            <div className="app-subtitle">
-              <ClockCircleOutlined />
-              LaunchAgent 小管家
-            </div>
-          </div>
+          <img className="brand-mark" src={tickMascot} alt="" />
+          <div className="app-title">Tick</div>
         </div>
         <div className="header-controls">
           <div className="view-switch" role="tablist" aria-label="主视图">
@@ -213,10 +190,7 @@ function App() {
           </div>
           <Space className="header-actions">
             <Button aria-label="设置" icon={<SettingOutlined />} onClick={() => setSettingsOpen(true)} />
-            <Button icon={<RobotOutlined />} onClick={() => setAutomationOpen(true)}>
-              AI 创建
-            </Button>
-            <Button icon={<PlusOutlined />} type="primary" onClick={openCreate}>
+            <Button icon={<PlusOutlined />} type="primary" onClick={() => setAutomationOpen(true)}>
               新建任务
             </Button>
           </Space>
@@ -236,12 +210,7 @@ function App() {
             }}
           />
         ) : jobs.length === 0 && !loading ? (
-          <QuickScriptCreator
-            saving={saving}
-            onSubmit={handleQuickScriptSave}
-            onAdvanced={openCreate}
-            onAutomation={() => setAutomationOpen(true)}
-          />
+          <EmptyTasks onCreate={() => setAutomationOpen(true)} onManual={openCreate} />
         ) : (
           <div className="workspace">
             <JobsTable
@@ -288,116 +257,35 @@ function App() {
         }}
         onSubmit={handleSave}
       />
-      <AutomationModal open={automationOpen} onCancel={() => setAutomationOpen(false)} onGenerated={openGeneratedAutomation} />
+      <AutomationModal
+        open={automationOpen}
+        onCancel={() => setAutomationOpen(false)}
+        onManual={() => {
+          setAutomationOpen(false);
+          openCreate();
+        }}
+        onGenerated={openGeneratedAutomation}
+      />
       <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} />
     </Layout>
   );
 }
 
-function QuickScriptCreator({
-  saving,
-  onSubmit,
-  onAdvanced,
-  onAutomation,
-}: {
-  saving: boolean;
-  onSubmit: (input: LaunchdJobInput) => Promise<void>;
-  onAdvanced: () => void;
-  onAutomation: () => void;
-}) {
-  const [name, setName] = useState("我的脚本任务");
-  const [time, setTime] = useState("09:00:00");
-  const [script, setScript] = useState(DEFAULT_NODE_SCRIPT);
-  const [debugging, setDebugging] = useState(false);
-  const [debugResult, setDebugResult] = useState<RunNodeScriptDebugResponse>();
-
-  async function handleDebugScript() {
-    if (!script.trim()) {
-      message.warning("没有可运行的脚本内容");
-      return;
-    }
-    setDebugging(true);
-    try {
-      const result = await runNodeScriptDebug({ script });
-      setDebugResult(result);
-      if (result.exitCode === 0 && !result.timedOut) {
-        message.success("调试运行完成");
-      } else {
-        message.warning("调试运行结束，检查输出");
-      }
-    } catch (err) {
-      message.error(friendlyError(err));
-    } finally {
-      setDebugging(false);
-    }
-  }
-
-  async function submit() {
-    const [hour = "0", minute = "0", second = "0"] = time.split(":");
-    const input = emptyJobInput();
-    input.name = name.trim() || "我的脚本任务";
-    input.description = "直接在 Tick 里创建的 Node.js 脚本";
-    input.schedule.calendar.hour = Number(hour);
-    input.schedule.calendar.minute = Number(minute);
-    input.schedule.calendar.second = Number(second);
-    input.execution.mode = "inline_shell";
-    input.execution.interpreter = "/usr/bin/env node";
-    input.execution.inlineScript = script.trim() || DEFAULT_NODE_SCRIPT;
-    await onSubmit(input);
-  }
-
+function EmptyTasks({ onCreate, onManual }: { onCreate: () => void; onManual: () => void }) {
   return (
-    <div className="quick-create-shell">
-      <div className="quick-create-copy">
-        <TickMascot />
-        <span className="eyebrow">YOUR FIRST LAUNCHAGENT</span>
-        <Typography.Title level={2}>从一段脚本开始，认识 macOS 定时任务</Typography.Title>
-        <Typography.Paragraph type="secondary">
-          写下脚本和运行时间，Tick 会替你生成 plist、交给 launchd，并把每次运行的输出留在这里。
-        </Typography.Paragraph>
-        <div className="learning-note">
-          <ClockCircleOutlined />
-          <span>创建后可以直接查看生成的 plist，理解 LaunchAgent 到底做了什么。</span>
-        </div>
-      </div>
-
-      <div className="quick-create-panel panel">
-        <div className="quick-create-fields">
-          <Input value={name} onChange={(event) => setName(event.target.value)} placeholder="任务名称" />
-          <Input type="time" step={1} value={time} onChange={(event) => setTime(event.target.value)} />
-        </div>
-        <CodeMirror
-          value={script}
-          height="300px"
-          extensions={[tickEditorTheme, javascript({ jsx: true, typescript: true })]}
-          basicSetup={{ lineNumbers: true, foldGutter: true }}
-          onChange={setScript}
-        />
-        <Button className="quick-automation-button" icon={<RobotOutlined />} onClick={onAutomation}>
-          用一句话生成完整自动化
+    <div className="empty-tasks">
+      <img src={tickMascot} alt="" />
+      <Typography.Title level={3}>还没有任务</Typography.Title>
+      <Typography.Paragraph type="secondary">创建一个定时任务，Tick 会负责保存配置和运行日志。</Typography.Paragraph>
+      <Space>
+        <Button type="primary" icon={<PlusOutlined />} onClick={onCreate}>
+          新建任务
         </Button>
-        <div className="debug-toolbar">
-          <Button icon={<PlayCircleOutlined />} loading={debugging} onClick={handleDebugScript}>
-            调试运行
-          </Button>
-          <Typography.Text type="secondary">先跑一次，看结果，再保存成定时任务。</Typography.Text>
-        </div>
-        <ScriptDebugPanel result={debugResult} />
-        <div className="quick-create-actions">
-          <Typography.Text type="secondary">生成后可以继续手改，保存时会按上面的时间定时运行。</Typography.Text>
-          <Space>
-            <Button onClick={onAdvanced}>高级编辑</Button>
-            <Button type="primary" icon={<PlusOutlined />} loading={saving} onClick={submit}>
-              保存任务
-            </Button>
-          </Space>
-        </div>
-      </div>
+        <Button onClick={onManual}>手动填写</Button>
+      </Space>
     </div>
   );
 }
-
-const DEFAULT_NODE_SCRIPT = `console.log("tick", new Date().toLocaleString());`;
 
 function ScheduleCalendar({
   jobs,
