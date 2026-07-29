@@ -161,10 +161,19 @@ function App() {
       <Header className="app-header">
         <div className="window-drag-region" data-tauri-drag-region />
         <div className="brand-block">
-          <img className="brand-mark" src={tickMascot} alt="" />
-          <div>
-            <div className="app-title">Tick</div>
-            <div className="app-subtitle">把 LaunchAgent 变得看得见</div>
+          <div className="brand-sticker" aria-hidden="true">
+            <img className="brand-mark" src={tickMascot} alt="" />
+            <span className="brand-sticker-dot" />
+          </div>
+          <div className="brand-copy">
+            <div className="app-title-row">
+              <div className="app-title">Tick</div>
+              <span className="brand-kicker">准时营业</span>
+            </div>
+            <div className="app-subtitle">
+              <ClockCircleOutlined />
+              LaunchAgent 小管家
+            </div>
           </div>
         </div>
         <div className="header-controls">

@@ -1699,35 +1699,112 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  height: 76px;
-  min-height: 76px;
-  padding: 26px 24px 10px 82px;
+  height: 72px;
+  min-height: 72px;
+  padding: 24px 24px 8px 82px;
   border-bottom: 1px solid var(--line);
   background: rgba(250, 251, 249, 0.92);
   box-shadow: none;
 }
 
 .brand-block {
-  gap: 0;
-  min-width: 220px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 214px;
+}
+
+.brand-sticker {
+  position: relative;
+  display: grid;
+  flex: 0 0 42px;
+  width: 42px;
+  height: 42px;
+  place-items: center;
+  overflow: visible;
+  border: 1px solid rgba(25, 139, 120, 0.13);
+  border-radius: 14px 14px 16px 12px;
+  background:
+    radial-gradient(circle at 30% 20%, #ffffff 0 18%, transparent 19%),
+    linear-gradient(145deg, #e8f7f1, #f8fbf4);
+  box-shadow:
+    0 5px 12px rgba(25, 139, 120, 0.08),
+    inset 0 1px 0 #ffffff;
+  transform: rotate(-2deg);
+  transition:
+    transform 180ms ease,
+    box-shadow 180ms ease;
+}
+
+.brand-block:hover .brand-sticker {
+  box-shadow:
+    0 7px 16px rgba(25, 139, 120, 0.12),
+    inset 0 1px 0 #ffffff;
+  transform: translateY(-1px) rotate(2deg);
 }
 
 .brand-block .brand-mark {
-  flex: 0 0 40px;
-  width: 40px;
-  height: 40px;
-  max-width: 40px;
-  max-height: 40px;
-  margin-right: 10px;
+  width: 34px;
+  height: 34px;
+  max-width: 34px;
+  max-height: 34px;
+  object-fit: contain;
+}
+
+.brand-sticker-dot {
+  position: absolute;
+  right: -3px;
+  bottom: 3px;
+  width: 9px;
+  height: 9px;
+  border: 2px solid #fafbf9;
+  border-radius: 999px;
+  background: #e4b84f;
+  box-shadow: 0 2px 5px rgba(160, 116, 18, 0.2);
+}
+
+.brand-copy {
+  min-width: 0;
+}
+
+.app-title-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
 }
 
 .app-title {
-  font-size: 20px;
-  font-weight: 760;
+  font-size: 18px;
+  font-weight: 780;
+  line-height: 1;
+  letter-spacing: -0.02em;
+}
+
+.brand-kicker {
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: #fff3cf;
+  color: #80601c;
+  font-size: 9px;
+  font-weight: 720;
+  line-height: 1.35;
+  letter-spacing: 0.02em;
 }
 
 .app-subtitle {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 4px;
+  color: #7b8580;
   font-size: 10px;
+  font-weight: 560;
+  letter-spacing: 0.01em;
+}
+
+.app-subtitle .anticon {
+  color: var(--accent);
+  font-size: 9px;
 }
 
 .header-controls {
