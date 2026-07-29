@@ -2066,3 +2066,52 @@ body {
   border-radius: 14px;
   box-shadow: 0 12px 36px rgba(35, 45, 40, 0.07);
 }
+
+/* Keep the task editor inside its own viewport. CodeMirror intentionally
+   gives long lines intrinsic width, so every grid ancestor must be shrinkable. */
+.job-form-modal {
+  overflow-x: hidden;
+}
+
+.job-form-modal .ant-modal {
+  max-width: calc(100vw - 32px);
+  margin-inline: auto;
+  padding-bottom: 24px;
+}
+
+.job-form-modal .ant-modal-content,
+.job-form-modal .ant-modal-body,
+.job-form,
+.job-form-layout,
+.job-form-main,
+.form-section,
+.composer-card,
+.script-editor-block,
+.script-editor-block .ant-form-item,
+.script-editor-block .ant-form-item-control,
+.script-editor-block .ant-form-item-control-input,
+.script-editor-block .ant-form-item-control-input-content,
+.script-editor-block .cm-theme,
+.script-editor-block .cm-editor {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.job-form-modal .ant-modal-content {
+  overflow: hidden;
+}
+
+.script-editor-block .cm-theme {
+  width: 100%;
+  overflow: hidden;
+}
+
+.script-editor-block .cm-scroller {
+  max-width: 100%;
+  overflow: auto;
+}
+
+.job-form-modal .ant-segmented {
+  width: 100%;
+  min-width: 0;
+}

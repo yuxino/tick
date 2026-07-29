@@ -175,7 +175,16 @@ export function JobFormModal({ open, initialValue, saving, onCancel, onSubmit, d
     <Modal
       title={initialValue?.id ? "编辑任务" : draftSummary ? "检查 AI 自动化" : "新建任务"}
       open={open}
-      width={900}
+      width="min(900px, calc(100vw - 32px))"
+      wrapClassName="job-form-modal"
+      style={{ top: 24 }}
+      styles={{
+        body: {
+          maxHeight: "calc(100vh - 168px)",
+          overflowX: "hidden",
+          overflowY: "auto",
+        },
+      }}
       onCancel={onCancel}
       onOk={handleOk}
       confirmLoading={saving}
