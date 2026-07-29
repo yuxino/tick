@@ -1,7 +1,7 @@
 <div align="center">
   <img src="src/assets/tick-mascot.png" width="92" alt="Tick">
   <h1>Tick</h1>
-  <p>在窗口里管好自己的 macOS LaunchAgent。</p>
+  <p>一个给 macOS 用的定时任务应用。</p>
   <p>
     <a href="https://github.com/yuxino/tick/releases/latest">下载</a>
     · <a href="#从源码运行">从源码运行</a>
@@ -11,15 +11,13 @@
 
 ![Tick 主界面](docs/images/tick-overview.jpg)
 
-## 这是个什么东西
+## 不用再手写 plist
 
-我写 Tick，最初只是想弄明白 macOS 的 LaunchAgent。
+Tick 把 macOS 自带的 LaunchAgent 做成了一个看得见的任务列表。
 
-plist 不难，但手写很烦；`launchctl` 的命令也总记不住。任务没跑起来时，还要再去找 stdout、stderr 和加载状态。Tick 把这些东西放进了一个窗口：什么时候运行、实际生成了什么配置、日志写到哪，都能直接看。
+新建任务时，填好要运行的脚本和时间就行。Tick 会生成 plist、加载任务，并把日志收在固定的位置。之后要临时运行一次、改时间、停用任务或者查错，也都在同一个窗口里完成。
 
-项目开工时正好赶上 DeepSeek V4 发布，我也想找个真实场景试试它。于是 Tick 多了一个可选的 AI 入口：说一句想自动完成的事，它会起草运行时间和脚本。草稿不会直接启用，还是要自己看过、试过，再保存。
-
-这不是 Alfred 或 Raycast 的替代品，也没打算包办所有自动化。它就是一个小工具，顺便记录我学习 LaunchAgent 和体验 DeepSeek V4 的过程。
+每天跑一段 Node.js、每周调用一次备份脚本、隔一段时间整理文件——这类本地任务都可以交给 Tick。
 
 <table>
   <tr>
@@ -32,7 +30,7 @@ plist 不难，但手写很烦；`launchctl` 的命令也总记不住。任务�
   </tr>
 </table>
 
-## 能做的事
+## 用 Tick 做什么
 
 - 创建、编辑、启停和删除 Tick 自己管理的 LaunchAgent
 - 按固定日期、时间或间隔运行任务
@@ -51,13 +49,19 @@ Tick 只管理它自己创建的用户级任务，不碰系统 daemon。
 
 固定时间对应 `StartCalendarInterval`，固定间隔对应 `StartInterval`。还有一个容易踩的坑：LaunchAgent 不会加载交互式 shell 的 profile，所以解释器、脚本和工作目录最好写绝对路径。
 
-## DeepSeek 是可选的
+## 也可以直接说你想做什么
 
-不用 AI，Tick 也能正常创建和管理任务。
+新建任务时，可以手动填写，也可以先用一句话描述。Tick 会请 DeepSeek 起草名称、运行计划和脚本，遇到值得留意的操作也会一起标出来。生成结果只是一份草稿，不会跳过确认直接启用。
 
-如果要用，在右上角设置里填一次 API Key。Tick 会把 Key 存在当前用户的应用设置目录，文件权限限制为当前用户读写。它不会进入项目源码或任务日志，但仍然是本机明文文件。不想留着时，可以随时从设置里删除。
+这部分完全可选。不配置 DeepSeek，其他功能照常使用。
 
-AI 生成的是一份待检查的草稿，包括名称、说明、运行计划、脚本和风险提示。Tick 不会绕过确认直接把它挂进 LaunchAgent。
+API Key 只需要在设置里填一次。Tick 会把它存在当前用户的应用设置目录，文件权限限制为当前用户读写。Key 不会进入项目源码或任务日志，但它仍然是本机明文文件；不想保留时，可以随时从设置里删除。
+
+## 它是怎么来的
+
+我经常用 LaunchAgent 跑一些定时脚本，但一直觉得它缺一个简单的界面。每次手写 plist、查 `launchctl`、再去翻日志，事情不难，过程却很碎。
+
+做 Tick 时正好赶上 DeepSeek V4 发布，自然语言创建任务也就成了应用的一部分。应用的目标一直很具体：把任务建好，让它准时运行，出了问题也知道去哪里看。
 
 ## 从源码运行
 
