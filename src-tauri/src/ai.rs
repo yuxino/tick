@@ -237,6 +237,7 @@ pub async fn generate_automation(
     if draft.job.execution.mode != crate::launchd::models::ExecutionMode::InlineShell {
         return Err("AI 生成了 Tick 暂不支持自动创建的脚本类型，请重试".to_string());
     }
+    validate_native_capabilities(prompt, &draft.job.execution.inline_script)?;
     Ok(draft)
 }
 
@@ -413,7 +414,9 @@ fn system_prompt() -> String {
         "- 只输出 JavaScript 代码，不要 Markdown，不要解释。",
         "- 代码会由 /usr/bin/env node 执行。",
         "- 使用 Node.js 内置模块，避免第三方依赖。",
-        "- 可以用 node:child_process 调 macOS 命令，例如 osascript 发通知。",
+        "- 用户可见的提醒必须走 macOS Notification Center：用 node:child_process.execFileSync 调 /usr/bin/osascript，并执行 display notification。",
+        "- console.log 和 console.error 只会进入 Tick 的任务日志，不能代替通知、对话框或其他用户可见反馈。",
+        "- 打开 URL 或文件使用 /usr/bin/open；移到废纸篓使用 ~/.Trash 或 Finder，不要永久删除。",
         "- 需要错误处理，把错误写到 console.error，并设置 process.exitCode = 1。",
         "- 输出必要日志到 console.log，便于 Tick 日志面板查看。",
         "- 不要读取密钥、token、SSH key、浏览器 cookie、钥匙串或私人文件，除非用户明确要求并限定路径。",
@@ -443,7 +446,10 @@ fn automation_system_prompt() -> String {
         "- 用户没说时间时，默认每天 09:00，并在 risks 中说明这个假设。",
         "- execution.mode 必须是 inline_shell，脚本必须是完整 Node.js JavaScript，只使用内置模块。",
         "- 需要调用 macOS 能力时可用 node:child_process 的 execFile/execFileSync，禁止拼接 shell 命令。",
-        "- 用户要求系统通知时，脚本必须实际调用 /usr/bin/osascript 的 display notification；只写日志不算完成。",
+        "- 用户说“提醒我”“通知我”“完成后告诉我”或“失败时通知”时，必须实际调用 /usr/bin/osascript 的 display notification，让消息出现在 macOS Notification Center。",
+        r#"- 通知的实现形态应类似：execFileSync("/usr/bin/osascript", ["-e", "display notification \"喝水时间到了\" with title \"Tick\""])。动态文本必须转义反斜杠和双引号。"#,
+        "- console.log/console.error 只写入 Tick 的 stdout/stderr 日志，用于排错；绝不能把它们当成用户提示。",
+        "- 用户要求打开网页、文件或应用时，使用 /usr/bin/open。用户要求删除文件时，默认移动到 ~/.Trash，不要调用 rm 永久删除。",
         "- summary 中声称完成的每一项行为，都必须能在 inlineScript 中找到对应实现。",
         "- 文件路径使用用户给出的绝对路径；没给路径时不要猜私人目录，写入 risks 并用安全的占位逻辑。",
         "- 删除操作默认移到废纸篓，不要永久删除；在 risks 中明确列出会修改、移动或联网的行为。",
@@ -507,6 +513,26 @@ fn extract_json(content: &str) -> String {
         .to_string()
 }
 
+fn validate_native_capabilities(prompt: &str, script: &str) -> Result<(), String> {
+    let asks_for_notification = [
+        "提醒我",
+        "通知我",
+        "发通知",
+        "系统通知",
+        "完成后告诉我",
+        "失败时通知",
+    ]
+    .iter()
+    .any(|keyword| prompt.contains(keyword));
+    let implements_notification =
+        script.contains("/usr/bin/osascript") && script.contains("display notification");
+
+    if asks_for_notification && !implements_notification {
+        return Err("AI 只生成了日志，没有真正调用 macOS 系统通知；请重试生成".to_string());
+    }
+    Ok(())
+}
+
 fn trim_error_body(body: &str) -> String {
     const MAX_LEN: usize = 500;
     let trimmed = body.trim();
@@ -518,7 +544,7 @@ fn trim_error_body(body: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{mask_api_key, validate_api_key};
+    use super::{mask_api_key, validate_api_key, validate_native_capabilities};
 
     #[test]
     fn validates_api_key_length_without_requiring_a_specific_prefix() {
@@ -531,5 +557,15 @@ mod tests {
     fn masks_all_but_a_safe_hint() {
         assert_eq!(mask_api_key("sk-1234567890"), "sk-••••7890");
         assert_eq!(mask_api_key("abcdefghijkl"), "••••ijkl");
+    }
+
+    #[test]
+    fn rejects_console_log_as_a_notification_substitute() {
+        assert!(validate_native_capabilities("每天提醒我喝水", "console.log('喝水')").is_err());
+        assert!(validate_native_capabilities(
+            "每天提醒我喝水",
+            r#"execFileSync("/usr/bin/osascript", ["-e", "display notification \"喝水\""])"#
+        )
+        .is_ok());
     }
 }
