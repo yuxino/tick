@@ -8,6 +8,7 @@ import {
   PlusOutlined,
   RightOutlined,
   RobotOutlined,
+  SettingOutlined,
   UnorderedListOutlined,
 } from "@ant-design/icons";
 import { javascript } from "@codemirror/lang-javascript";
@@ -20,6 +21,7 @@ import { LogsPanel } from "./components/LogsPanel";
 import tickMascot from "./assets/tick-mascot.png";
 import { PlistPanel } from "./components/PlistPanel";
 import { ScriptDebugPanel } from "./components/ScriptDebugPanel";
+import { SettingsModal } from "./components/SettingsModal";
 import { TickMascot } from "./components/TickMascot";
 import { tickEditorTheme } from "./editorTheme";
 import {
@@ -51,6 +53,7 @@ function App() {
   const [formOpen, setFormOpen] = useState(false);
   const [editingJob, setEditingJob] = useState<LaunchdJob>();
   const [activeView, setActiveView] = useState<MainView>("tasks");
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   const selectedJob = useMemo(
     () => jobs.find((job) => job.id === selectedId) ?? jobs[0],
@@ -188,6 +191,7 @@ function App() {
             </button>
           </div>
           <Space className="header-actions">
+            <Button aria-label="设置" icon={<SettingOutlined />} onClick={() => setSettingsOpen(true)} />
             <Button icon={<PlusOutlined />} type="primary" onClick={openCreate}>
               新建任务
             </Button>
@@ -252,6 +256,7 @@ function App() {
         }}
         onSubmit={handleSave}
       />
+      <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} />
     </Layout>
   );
 }

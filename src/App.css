@@ -1708,12 +1708,16 @@ body {
 }
 
 .brand-block {
+  gap: 0;
   min-width: 220px;
 }
 
-.brand-mark {
+.brand-block .brand-mark {
+  flex: 0 0 40px;
   width: 40px;
   height: 40px;
+  max-width: 40px;
+  max-height: 40px;
   margin-right: 10px;
 }
 
@@ -1765,6 +1769,40 @@ body {
 .header-actions .ant-btn-primary {
   background: var(--accent) !important;
   box-shadow: none;
+}
+
+.settings-section {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding-top: 8px;
+}
+
+.settings-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.settings-heading .ant-typography {
+  margin: 0;
+}
+
+.settings-key-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+}
+
+@media (max-width: 760px) {
+  .settings-heading {
+    flex-direction: column;
+  }
+
+  .settings-key-row {
+    grid-template-columns: 1fr;
+  }
 }
 
 .app-content {

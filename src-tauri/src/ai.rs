@@ -1,12 +1,27 @@
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
-use std::process::Command;
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
 use tokio::process::Command as TokioCommand;
 use tokio::time::{timeout, Duration};
 
 const DEEPSEEK_URL: &str = "https://api.deepseek.com/chat/completions";
 const DEEPSEEK_MODEL: &str = "deepseek-chat";
+const KEYCHAIN_SERVICE: &str = "com.gavin.tick";
+const KEYCHAIN_ACCOUNT: &str = "deepseek-api-key";
+const MAX_API_KEY_LEN: usize = 512;
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DeepSeekConfigStatus {
+    pub configured: bool,
+    pub masked_hint: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SaveDeepSeekApiKeyRequest {
+    pub api_key: String,
+}
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -36,6 +51,61 @@ pub struct RunNodeScriptDebugResponse {
     pub exit_code: Option<i32>,
     pub duration_ms: u128,
     pub timed_out: bool,
+}
+
+#[tauri::command]
+pub fn get_deepseek_config_status() -> Result<DeepSeekConfigStatus, String> {
+    match keychain_entry()?.get_password() {
+        Ok(key) if !key.trim().is_empty() => Ok(DeepSeekConfigStatus {
+            configured: true,
+            masked_hint: Some(mask_api_key(key.trim())),
+        }),
+        Ok(_) | Err(keyring::Error::NoEntry) => Ok(DeepSeekConfigStatus {
+            configured: false,
+            masked_hint: None,
+        }),
+        Err(_) => Err("无法读取 macOS 钥匙串，请检查 Tick 的钥匙串访问权限".to_string()),
+    }
+}
+
+#[tauri::command]
+pub fn save_deepseek_api_key(
+    input: SaveDeepSeekApiKeyRequest,
+) -> Result<DeepSeekConfigStatus, String> {
+    let key = validate_api_key(&input.api_key)?;
+    keychain_entry()?
+        .set_password(key)
+        .map_err(|_| "无法写入 macOS 钥匙串，请检查 Tick 的钥匙串访问权限".to_string())?;
+
+    Ok(DeepSeekConfigStatus {
+        configured: true,
+        masked_hint: Some(mask_api_key(key)),
+    })
+}
+
+#[tauri::command]
+pub fn delete_deepseek_api_key() -> Result<(), String> {
+    match keychain_entry()?.delete_credential() {
+        Ok(()) | Err(keyring::Error::NoEntry) => Ok(()),
+        Err(_) => Err("无法从 macOS 钥匙串删除 DeepSeek API Key".to_string()),
+    }
+}
+
+#[tauri::command]
+pub async fn test_deepseek_connection() -> Result<(), String> {
+    let api_key = deepseek_api_key()?;
+    let request = DeepSeekRequest {
+        model: DEEPSEEK_MODEL.to_string(),
+        temperature: 0.0,
+        max_tokens: 1,
+        messages: vec![DeepSeekMessage {
+            role: "user".to_string(),
+            content: "Reply OK.".to_string(),
+        }],
+    };
+
+    send_deepseek_request(&api_key, &request).await?;
+    Ok(())
 }
 
 #[derive(Debug, Serialize)]
@@ -93,28 +163,7 @@ pub async fn generate_node_script(
         ],
     };
 
-    let client = reqwest::Client::new();
-    let response = client
-        .post(DEEPSEEK_URL)
-        .bearer_auth(api_key)
-        .json(&request)
-        .send()
-        .await
-        .map_err(|err| format!("请求 DeepSeek 失败：{err}"))?;
-
-    if !response.status().is_success() {
-        let status = response.status();
-        let body = response.text().await.unwrap_or_default();
-        return Err(format!(
-            "DeepSeek 返回错误 {status}：{}",
-            trim_error_body(&body)
-        ));
-    }
-
-    let completion = response
-        .json::<DeepSeekResponse>()
-        .await
-        .map_err(|err| format!("解析 DeepSeek 响应失败：{err}"))?;
+    let completion = send_deepseek_request(&api_key, &request).await?;
 
     let content = completion
         .choices
@@ -172,24 +221,73 @@ pub async fn run_node_script_debug(
 }
 
 fn deepseek_api_key() -> Result<String, String> {
-    if let Ok(value) = std::env::var("DEEPSEEK_API_KEY") {
-        let key = value.trim();
-        if !key.is_empty() {
-            return Ok(key.to_string());
-        }
-    }
+    let key = keychain_entry()?.get_password().map_err(|err| match err {
+        keyring::Error::NoEntry => "还没有配置 DeepSeek API Key，请在 Tick 设置中添加".to_string(),
+        _ => "无法读取 macOS 钥匙串，请检查 Tick 的钥匙串访问权限".to_string(),
+    })?;
+    validate_api_key(&key).map(str::to_string)
+}
 
-    let output = Command::new("zsh")
-        .args(["-lc", "print -r -- \"$DEEPSEEK_API_KEY\""])
-        .output()
-        .map_err(|err| format!("读取 zsh 里的 DEEPSEEK_API_KEY 失败：{err}"))?;
+fn keychain_entry() -> Result<keyring::Entry, String> {
+    keyring::Entry::new(KEYCHAIN_SERVICE, KEYCHAIN_ACCOUNT)
+        .map_err(|_| "无法连接 macOS 钥匙串".to_string())
+}
 
-    let key = String::from_utf8_lossy(&output.stdout).trim().to_string();
+fn validate_api_key(value: &str) -> Result<&str, String> {
+    let key = value.trim();
     if key.is_empty() {
-        return Err("没有找到 DEEPSEEK_API_KEY，请先在 zsh 环境里设置它".to_string());
+        return Err("请输入 DeepSeek API Key".to_string());
+    }
+    if key.len() < 12 {
+        return Err("API Key 看起来过短，请检查后重试".to_string());
+    }
+    if key.len() > MAX_API_KEY_LEN {
+        return Err("API Key 长度异常，请检查后重试".to_string());
+    }
+    Ok(key)
+}
+
+fn mask_api_key(key: &str) -> String {
+    let suffix: String = key
+        .chars()
+        .rev()
+        .take(4)
+        .collect::<Vec<_>>()
+        .into_iter()
+        .rev()
+        .collect();
+    if key.starts_with("sk-") {
+        format!("sk-••••{suffix}")
+    } else {
+        format!("••••{suffix}")
+    }
+}
+
+async fn send_deepseek_request(
+    api_key: &str,
+    request: &DeepSeekRequest,
+) -> Result<DeepSeekResponse, String> {
+    let response = reqwest::Client::new()
+        .post(DEEPSEEK_URL)
+        .bearer_auth(api_key)
+        .json(request)
+        .send()
+        .await
+        .map_err(|err| format!("请求 DeepSeek 失败：{err}"))?;
+
+    if !response.status().is_success() {
+        let status = response.status();
+        let body = response.text().await.unwrap_or_default();
+        return Err(format!(
+            "DeepSeek 返回错误 {status}：{}",
+            trim_error_body(&body)
+        ));
     }
 
-    Ok(key)
+    response
+        .json::<DeepSeekResponse>()
+        .await
+        .map_err(|err| format!("解析 DeepSeek 响应失败：{err}"))
 }
 
 fn write_debug_script(script: &str) -> Result<PathBuf, String> {
@@ -260,4 +358,22 @@ fn trim_error_body(body: &str) -> String {
         return trimmed.to_string();
     }
     format!("{}...", trimmed.chars().take(MAX_LEN).collect::<String>())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{mask_api_key, validate_api_key};
+
+    #[test]
+    fn validates_api_key_length_without_requiring_a_specific_prefix() {
+        assert!(validate_api_key("sk-123456789").is_ok());
+        assert!(validate_api_key("another-provider-shaped-key").is_ok());
+        assert!(validate_api_key("short").is_err());
+    }
+
+    #[test]
+    fn masks_all_but_a_safe_hint() {
+        assert_eq!(mask_api_key("sk-1234567890"), "sk-••••7890");
+        assert_eq!(mask_api_key("abcdefghijkl"), "••••ijkl");
+    }
 }

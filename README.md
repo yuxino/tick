@@ -38,6 +38,7 @@ Tick 是一个为了理解 macOS **LaunchAgent** 而做的桌面实验。
 - 在保存前调试脚本，并查看 stdout / stderr 日志
 - 预览 Tick 生成的 plist，理解界面操作对应的系统配置
 - 用日程视图查看任务的预计运行时间
+- 在应用内配置 DeepSeek，按自然语言生成 Node.js 任务脚本
 
 ## 它在系统里做了什么
 
@@ -47,6 +48,7 @@ Tick 只管理自己创建的用户级 LaunchAgent，不会修改系统级 daemo
 | --- | --- |
 | LaunchAgent | `~/Library/LaunchAgents/com.gavin.tick.*.plist` |
 | 日志与内联脚本 | `~/Library/Application Support/tick/` |
+| DeepSeek API Key | macOS 钥匙串（服务名 `com.gavin.tick`） |
 | 任务标识前缀 | `com.gavin.tick.` |
 
 固定时间计划使用 `StartCalendarInterval`。由于 `launchd` 的日历计划不直接支持秒，Tick 会在需要时生成一个先 `sleep` 再执行命令的包装脚本；间隔计划使用原生 `StartInterval`。
@@ -61,6 +63,10 @@ Tick 只管理自己创建的用户级 LaunchAgent，不会修改系统级 daemo
 4. 打开“plist 配置”和“实时日志”，看看 Tick 在背后做了什么
 
 Tick 目前只面向 macOS，仍是一个学习性质的早期项目。使用前请确认任务脚本本身是安全的。
+
+### 配置 DeepSeek
+
+点击顶部的设置按钮，粘贴自己的 DeepSeek API Key 并保存。Tick 只会把密钥写入 macOS 钥匙串；不会保存到项目文件、浏览器存储、日志或环境变量，也不会在界面中读回完整密钥。删除配置时，密钥会从钥匙串一并移除。
 
 ## 从源码运行
 
