@@ -1699,9 +1699,9 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  height: 72px;
-  min-height: 72px;
-  padding: 24px 24px 8px 24px;
+  height: 78px;
+  min-height: 78px;
+  padding: 29px 24px 9px 42px;
   border-bottom: 1px solid var(--line);
   background: rgba(250, 251, 249, 0.92);
   box-shadow: none;
@@ -1711,7 +1711,7 @@ body {
   display: flex;
   align-items: center;
   gap: 10px;
-  min-width: 190px;
+  min-width: 200px;
 }
 
 .brand-sticker {
