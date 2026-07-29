@@ -1,4 +1,8 @@
+use crate::launchd::models::LaunchdJobInput;
+use crate::launchd::validation::validate_job_input;
 use serde::{Deserialize, Serialize};
+use std::fs::OpenOptions;
+use std::io::Write;
 use std::path::PathBuf;
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
 use tokio::process::Command as TokioCommand;
@@ -6,9 +10,13 @@ use tokio::time::{timeout, Duration};
 
 const DEEPSEEK_URL: &str = "https://api.deepseek.com/chat/completions";
 const DEEPSEEK_MODEL: &str = "deepseek-chat";
-const KEYCHAIN_SERVICE: &str = "com.gavin.tick";
-const KEYCHAIN_ACCOUNT: &str = "deepseek-api-key";
 const MAX_API_KEY_LEN: usize = 512;
+
+#[derive(Debug, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct AppSettings {
+    deepseek_api_key: Option<String>,
+}
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -38,6 +46,21 @@ pub struct GenerateNodeScriptResponse {
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct GenerateAutomationRequest {
+    pub prompt: String,
+    pub current_job: Option<LaunchdJobInput>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AutomationDraft {
+    pub job: LaunchdJobInput,
+    pub summary: String,
+    pub risks: Vec<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct RunNodeScriptDebugRequest {
     pub script: String,
     pub working_directory: Option<String>,
@@ -55,16 +78,15 @@ pub struct RunNodeScriptDebugResponse {
 
 #[tauri::command]
 pub fn get_deepseek_config_status() -> Result<DeepSeekConfigStatus, String> {
-    match keychain_entry()?.get_password() {
-        Ok(key) if !key.trim().is_empty() => Ok(DeepSeekConfigStatus {
+    match read_settings()?.deepseek_api_key {
+        Some(key) if !key.trim().is_empty() => Ok(DeepSeekConfigStatus {
             configured: true,
             masked_hint: Some(mask_api_key(key.trim())),
         }),
-        Ok(_) | Err(keyring::Error::NoEntry) => Ok(DeepSeekConfigStatus {
+        _ => Ok(DeepSeekConfigStatus {
             configured: false,
             masked_hint: None,
         }),
-        Err(_) => Err("无法读取 macOS 钥匙串，请检查 Tick 的钥匙串访问权限".to_string()),
     }
 }
 
@@ -73,9 +95,9 @@ pub fn save_deepseek_api_key(
     input: SaveDeepSeekApiKeyRequest,
 ) -> Result<DeepSeekConfigStatus, String> {
     let key = validate_api_key(&input.api_key)?;
-    keychain_entry()?
-        .set_password(key)
-        .map_err(|_| "无法写入 macOS 钥匙串，请检查 Tick 的钥匙串访问权限".to_string())?;
+    let mut settings = read_settings()?;
+    settings.deepseek_api_key = Some(key.to_string());
+    write_settings(&settings)?;
 
     Ok(DeepSeekConfigStatus {
         configured: true,
@@ -85,10 +107,9 @@ pub fn save_deepseek_api_key(
 
 #[tauri::command]
 pub fn delete_deepseek_api_key() -> Result<(), String> {
-    match keychain_entry()?.delete_credential() {
-        Ok(()) | Err(keyring::Error::NoEntry) => Ok(()),
-        Err(_) => Err("无法从 macOS 钥匙串删除 DeepSeek API Key".to_string()),
-    }
+    let mut settings = read_settings()?;
+    settings.deepseek_api_key = None;
+    write_settings(&settings)
 }
 
 #[tauri::command]
@@ -178,6 +199,48 @@ pub async fn generate_node_script(
 }
 
 #[tauri::command]
+pub async fn generate_automation(
+    input: GenerateAutomationRequest,
+) -> Result<AutomationDraft, String> {
+    let prompt = input.prompt.trim();
+    if prompt.is_empty() {
+        return Err("先描述你想让 Mac 自动做什么".to_string());
+    }
+
+    let api_key = deepseek_api_key()?;
+    let request = DeepSeekRequest {
+        model: DEEPSEEK_MODEL.to_string(),
+        temperature: 0.15,
+        max_tokens: 2600,
+        messages: vec![
+            DeepSeekMessage {
+                role: "system".to_string(),
+                content: automation_system_prompt(),
+            },
+            DeepSeekMessage {
+                role: "user".to_string(),
+                content: automation_user_prompt(prompt, input.current_job.as_ref()),
+            },
+        ],
+    };
+    let completion = send_deepseek_request(&api_key, &request).await?;
+    let content = completion
+        .choices
+        .first()
+        .map(|choice| choice.message.content.trim())
+        .filter(|content| !content.is_empty())
+        .ok_or_else(|| "DeepSeek 没有返回自动化方案".to_string())?;
+
+    let draft = serde_json::from_str::<AutomationDraft>(&extract_json(content))
+        .map_err(|_| "DeepSeek 返回的任务格式不完整，请换一种说法再试".to_string())?;
+    validate_job_input(&draft.job).map_err(|err| format!("AI 生成的任务无法使用：{err}"))?;
+    if draft.job.execution.mode != crate::launchd::models::ExecutionMode::InlineShell {
+        return Err("AI 生成了 Tick 暂不支持自动创建的脚本类型，请重试".to_string());
+    }
+    Ok(draft)
+}
+
+#[tauri::command]
 pub async fn run_node_script_debug(
     input: RunNodeScriptDebugRequest,
 ) -> Result<RunNodeScriptDebugResponse, String> {
@@ -221,16 +284,58 @@ pub async fn run_node_script_debug(
 }
 
 fn deepseek_api_key() -> Result<String, String> {
-    let key = keychain_entry()?.get_password().map_err(|err| match err {
-        keyring::Error::NoEntry => "还没有配置 DeepSeek API Key，请在 Tick 设置中添加".to_string(),
-        _ => "无法读取 macOS 钥匙串，请检查 Tick 的钥匙串访问权限".to_string(),
-    })?;
+    let key = read_settings()?
+        .deepseek_api_key
+        .ok_or_else(|| "还没有配置 DeepSeek API Key，请在 Tick 设置中添加".to_string())?;
     validate_api_key(&key).map(str::to_string)
 }
 
-fn keychain_entry() -> Result<keyring::Entry, String> {
-    keyring::Entry::new(KEYCHAIN_SERVICE, KEYCHAIN_ACCOUNT)
-        .map_err(|_| "无法连接 macOS 钥匙串".to_string())
+fn settings_path() -> Result<PathBuf, String> {
+    dirs::config_dir()
+        .map(|path| path.join("com.gavin.tick").join("settings.json"))
+        .ok_or_else(|| "无法找到应用配置目录".to_string())
+}
+
+fn read_settings() -> Result<AppSettings, String> {
+    let path = settings_path()?;
+    if !path.exists() {
+        return Ok(AppSettings::default());
+    }
+    let content = std::fs::read_to_string(path).map_err(|_| "无法读取 Tick 设置".to_string())?;
+    serde_json::from_str(&content).map_err(|_| "Tick 设置文件格式损坏".to_string())
+}
+
+fn write_settings(settings: &AppSettings) -> Result<(), String> {
+    let path = settings_path()?;
+    let directory = path
+        .parent()
+        .ok_or_else(|| "无法确定应用配置目录".to_string())?;
+    std::fs::create_dir_all(directory).map_err(|_| "无法创建 Tick 设置目录".to_string())?;
+
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(directory, std::fs::Permissions::from_mode(0o700))
+            .map_err(|_| "无法保护 Tick 设置目录".to_string())?;
+    }
+
+    let temporary_path = path.with_extension("json.tmp");
+    let mut options = OpenOptions::new();
+    options.create(true).truncate(true).write(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.mode(0o600);
+    }
+    let mut file = options
+        .open(&temporary_path)
+        .map_err(|_| "无法写入 Tick 设置".to_string())?;
+    let content =
+        serde_json::to_vec_pretty(settings).map_err(|_| "无法保存 Tick 设置".to_string())?;
+    file.write_all(&content)
+        .and_then(|_| file.sync_all())
+        .map_err(|_| "无法保存 Tick 设置".to_string())?;
+    std::fs::rename(temporary_path, path).map_err(|_| "无法替换 Tick 设置".to_string())
 }
 
 fn validate_api_key(value: &str) -> Result<&str, String> {
@@ -328,6 +433,42 @@ fn user_prompt(prompt: &str, current_script: Option<&str>) -> String {
     content
 }
 
+fn automation_system_prompt() -> String {
+    [
+        "你是 Tick 的 macOS 自动化规划器。把用户需求转换成一个完整 LaunchAgent 任务草稿。",
+        "只输出 JSON，不要 Markdown，不要解释。JSON 必须严格符合以下结构：",
+        r#"{"job":{"name":"任务名","description":"一句话说明","schedule":{"mode":"calendar","calendar":{"month":null,"day":null,"hour":9,"minute":0,"second":0},"interval":{"seconds":3600}},"execution":{"mode":"inline_shell","inlineScript":"可直接由 Node.js 执行的 JavaScript","scriptPath":"","interpreter":"/usr/bin/env node","arguments":"","workingDirectory":"","environment":[]}},"summary":"这个自动化会做什么","risks":["风险或权限提示"]}"#,
+        "规则：",
+        "- schedule.mode 只能是 calendar 或 interval。",
+        "- 用户没说时间时，默认每天 09:00，并在 risks 中说明这个假设。",
+        "- execution.mode 必须是 inline_shell，脚本必须是完整 Node.js JavaScript，只使用内置模块。",
+        "- 需要调用 macOS 能力时可用 node:child_process 的 execFile/execFileSync，禁止拼接 shell 命令。",
+        "- 用户要求系统通知时，脚本必须实际调用 /usr/bin/osascript 的 display notification；只写日志不算完成。",
+        "- summary 中声称完成的每一项行为，都必须能在 inlineScript 中找到对应实现。",
+        "- 文件路径使用用户给出的绝对路径；没给路径时不要猜私人目录，写入 risks 并用安全的占位逻辑。",
+        "- 删除操作默认移到废纸篓，不要永久删除；在 risks 中明确列出会修改、移动或联网的行为。",
+        "- 不读取钥匙串、SSH key、浏览器 cookie 或其他密钥。",
+        "- 脚本要有错误处理、console.log/console.error，并设置 process.exitCode。",
+        "- risks 没有风险时返回空数组。job.id 不要输出。",
+    ]
+    .join("\n")
+}
+
+fn automation_user_prompt(prompt: &str, current_job: Option<&LaunchdJobInput>) -> String {
+    let mut content = format!(
+        "今天是 {}。\n用户想要的自动化：\n{}",
+        chrono::Local::now().format("%Y-%m-%d"),
+        prompt
+    );
+    if let Some(job) = current_job {
+        if let Ok(json) = serde_json::to_string(job) {
+            content.push_str("\n\n当前任务草稿，可按需求修改：\n");
+            content.push_str(&json);
+        }
+    }
+    content
+}
+
 fn extract_script(content: &str) -> String {
     let trimmed = content.trim();
     if !trimmed.starts_with("```") {
@@ -349,6 +490,21 @@ fn extract_script(content: &str) -> String {
     }
 
     code_lines.join("\n").trim().to_string()
+}
+
+fn extract_json(content: &str) -> String {
+    let trimmed = content.trim();
+    if !trimmed.starts_with("```") {
+        return trimmed.to_string();
+    }
+    trimmed
+        .lines()
+        .skip(1)
+        .take_while(|line| !line.trim_start().starts_with("```"))
+        .collect::<Vec<_>>()
+        .join("\n")
+        .trim()
+        .to_string()
 }
 
 fn trim_error_body(body: &str) -> String {

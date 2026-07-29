@@ -10,6 +10,12 @@ export interface GenerateNodeScriptResponse {
   script: string;
 }
 
+export interface AutomationDraft {
+  job: LaunchdJobInput;
+  summary: string;
+  risks: string[];
+}
+
 export interface RunNodeScriptDebugInput {
   script: string;
   workingDirectory?: string;
@@ -65,6 +71,12 @@ export function printLaunchdJob(id: string) {
 
 export function generateNodeScript(input: GenerateNodeScriptInput) {
   return invoke<GenerateNodeScriptResponse>("generate_node_script", { input });
+}
+
+export function generateAutomation(prompt: string, currentJob?: LaunchdJobInput) {
+  return invoke<AutomationDraft>("generate_automation", {
+    input: { prompt, currentJob },
+  });
 }
 
 export function runNodeScriptDebug(input: RunNodeScriptDebugInput) {

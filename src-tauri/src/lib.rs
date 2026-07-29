@@ -95,6 +95,7 @@ pub fn run() {
             ai::save_deepseek_api_key,
             ai::delete_deepseek_api_key,
             ai::test_deepseek_connection,
+            ai::generate_automation,
             ai::generate_node_script,
             ai::run_node_script_debug,
             launchd::commands::list_launchd_jobs,

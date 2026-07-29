@@ -37,7 +37,7 @@
 - 跑 shell、脚本文件和 Node.js 脚本
 - 手动运行一次，确认脚本到底会不会工作
 - 看日志、看 plist，也可以打开日程视图找下一次运行时间
-- 用 DeepSeek 帮忙生成 Node.js 脚本
+- 用一句话生成任务名称、运行时间、脚本和风险提示，再检查、试运行和保存
 
 Tick 只碰自己创建的用户级任务，不会去改系统 daemon。
 
@@ -45,15 +45,17 @@ Tick 只碰自己创建的用户级任务，不会去改系统 daemon。
 | --- | --- |
 | LaunchAgent | `~/Library/LaunchAgents/com.gavin.tick.*.plist` |
 | 日志和内联脚本 | `~/Library/Application Support/tick/` |
-| DeepSeek API Key | macOS 钥匙串，服务名 `com.gavin.tick` |
+| DeepSeek API Key | 应用设置目录中的 `settings.json`（仅当前用户可读写） |
 
 固定时间使用 `StartCalendarInterval`，固定间隔使用 `StartInterval`。LaunchAgent 不会加载交互式 shell 的 profile，所以解释器、脚本和工作目录最好写绝对路径。这个坑我已经踩过了。
 
 ## DeepSeek
 
-DeepSeek 是可选的。点右上角设置，填自己的 API Key 就行。
+DeepSeek 是可选的。点右上角设置，填一次自己的 API Key，之后 Tick 会自动读取。
 
-Key 只保存在 macOS 钥匙串里，不会进源码、配置文件、日志或浏览器存储。界面也不会把完整 Key 读回来。不想用了，直接在设置里删掉。
+AI 入口不是单独写一段代码，而是根据一句话搭好整个任务草稿：名称、说明、运行计划、脚本和风险提示都会一起生成。Tick 不会直接启用它，先检查和试运行，觉得没问题再保存。
+
+Key 存在应用设置目录中，文件权限限制为当前用户读写。它不会进源码或日志，但仍然是本机明文文件；如果电脑账户本身不可信，不要使用这个功能。不想用了，直接在设置里删掉。
 
 ## 自己跑起来
 

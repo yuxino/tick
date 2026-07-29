@@ -2,7 +2,7 @@ import {
   CheckCircleFilled,
   DeleteOutlined,
   KeyOutlined,
-  SafetyCertificateOutlined,
+  InfoCircleOutlined,
 } from "@ant-design/icons";
 import { Alert, Button, Input, Modal, Popconfirm, Space, Tag, Typography, message } from "antd";
 import { useCallback, useEffect, useState } from "react";
@@ -51,7 +51,7 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
       const nextStatus = await saveDeepSeekApiKey(apiKey);
       setStatus(nextStatus);
       setApiKey("");
-      message.success("已安全保存到 macOS 钥匙串");
+      message.success("已保存，之后会自动读取");
     } catch (error) {
       message.error(friendlyError(error));
     } finally {
@@ -77,7 +77,7 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
       await deleteDeepSeekApiKey();
       setStatus({ configured: false });
       setApiKey("");
-      message.success("API Key 已从钥匙串删除");
+      message.success("API Key 已从本机设置中删除");
     } catch (error) {
       message.error(friendlyError(error));
     } finally {
@@ -98,7 +98,7 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
         <div className="settings-heading">
           <div>
             <Typography.Title level={5}>DeepSeek</Typography.Title>
-            <Typography.Text type="secondary">用于根据描述生成 Node.js 任务脚本</Typography.Text>
+            <Typography.Text type="secondary">用于根据描述生成完整自动化任务</Typography.Text>
           </div>
           {status.configured ? (
             <Tag color="success" icon={<CheckCircleFilled />}>
@@ -112,9 +112,9 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
         <Alert
           type="info"
           showIcon
-          icon={<SafetyCertificateOutlined />}
-          title="密钥只保存在 macOS 钥匙串"
-          description="Tick 不会把密钥写入配置文件、日志或项目源码，界面也不会读回完整密钥。"
+          icon={<InfoCircleOutlined />}
+          title="保存在这台电脑上"
+          description="保存一次后 Tick 会自动读取。Key 存在仅当前用户可读写的应用设置文件中，不会进入项目源码或日志。"
         />
 
         <div className="settings-key-row">

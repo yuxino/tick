@@ -16,6 +16,7 @@ import CodeMirror from "@uiw/react-codemirror";
 import { Alert, Button, Descriptions, Input, Layout, message, Popconfirm, Space, Switch, Tabs, Tag, Typography } from "antd";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { JobFormModal } from "./components/JobFormModal";
+import { AutomationModal } from "./components/AutomationModal";
 import { JobsTable } from "./components/JobsTable";
 import { LogsPanel } from "./components/LogsPanel";
 import tickMascot from "./assets/tick-mascot.png";
@@ -28,13 +29,12 @@ import {
   deleteLaunchdJob,
   disableLaunchdJob,
   enableLaunchdJob,
-  generateNodeScript,
   listLaunchdJobs,
   runNodeScriptDebug,
   runLaunchdJobNow,
   saveLaunchdJob,
 } from "./services/launchd";
-import type { RunNodeScriptDebugResponse } from "./services/launchd";
+import type { AutomationDraft, RunNodeScriptDebugResponse } from "./services/launchd";
 import type { LaunchdJob, LaunchdJobInput } from "./types/launchd";
 import { friendlyError } from "./utils/errors";
 import { commandSummary, emptyJobInput, scheduleSummary, statusLabel, toJobInput } from "./utils/launchd";
@@ -54,6 +54,8 @@ function App() {
   const [editingJob, setEditingJob] = useState<LaunchdJob>();
   const [activeView, setActiveView] = useState<MainView>("tasks");
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [automationOpen, setAutomationOpen] = useState(false);
+  const [automationDraft, setAutomationDraft] = useState<AutomationDraft>();
 
   const selectedJob = useMemo(
     () => jobs.find((job) => job.id === selectedId) ?? jobs[0],
@@ -82,11 +84,20 @@ function App() {
 
   function openCreate() {
     setEditingJob(undefined);
+    setAutomationDraft(undefined);
     setFormOpen(true);
   }
 
   function openEdit(job: LaunchdJob) {
     setEditingJob(job);
+    setAutomationDraft(undefined);
+    setFormOpen(true);
+  }
+
+  function openGeneratedAutomation(draft: AutomationDraft) {
+    setAutomationDraft(draft);
+    setEditingJob(undefined);
+    setAutomationOpen(false);
     setFormOpen(true);
   }
 
@@ -97,6 +108,7 @@ function App() {
       message.success("任务已保存");
       setFormOpen(false);
       setEditingJob(undefined);
+      setAutomationDraft(undefined);
       await loadJobs();
       setSelectedId(saved.id);
     } catch (err) {
@@ -201,6 +213,9 @@ function App() {
           </div>
           <Space className="header-actions">
             <Button aria-label="设置" icon={<SettingOutlined />} onClick={() => setSettingsOpen(true)} />
+            <Button icon={<RobotOutlined />} onClick={() => setAutomationOpen(true)}>
+              AI 创建
+            </Button>
             <Button icon={<PlusOutlined />} type="primary" onClick={openCreate}>
               新建任务
             </Button>
@@ -221,7 +236,12 @@ function App() {
             }}
           />
         ) : jobs.length === 0 && !loading ? (
-          <QuickScriptCreator saving={saving} onSubmit={handleQuickScriptSave} onAdvanced={openCreate} />
+          <QuickScriptCreator
+            saving={saving}
+            onSubmit={handleQuickScriptSave}
+            onAdvanced={openCreate}
+            onAutomation={() => setAutomationOpen(true)}
+          />
         ) : (
           <div className="workspace">
             <JobsTable
@@ -257,14 +277,18 @@ function App() {
 
       <JobFormModal
         open={formOpen}
-        initialValue={editingJob ? toJobInput(editingJob) : emptyJobInput()}
+        initialValue={editingJob ? toJobInput(editingJob) : automationDraft?.job ?? emptyJobInput()}
         saving={saving}
+        draftSummary={automationDraft?.summary}
+        draftRisks={automationDraft?.risks}
         onCancel={() => {
           setFormOpen(false);
           setEditingJob(undefined);
+          setAutomationDraft(undefined);
         }}
         onSubmit={handleSave}
       />
+      <AutomationModal open={automationOpen} onCancel={() => setAutomationOpen(false)} onGenerated={openGeneratedAutomation} />
       <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} />
     </Layout>
   );
@@ -274,35 +298,18 @@ function QuickScriptCreator({
   saving,
   onSubmit,
   onAdvanced,
+  onAutomation,
 }: {
   saving: boolean;
   onSubmit: (input: LaunchdJobInput) => Promise<void>;
   onAdvanced: () => void;
+  onAutomation: () => void;
 }) {
   const [name, setName] = useState("我的脚本任务");
   const [time, setTime] = useState("09:00:00");
   const [script, setScript] = useState(DEFAULT_NODE_SCRIPT);
-  const [aiPrompt, setAiPrompt] = useState("");
-  const [generating, setGenerating] = useState(false);
   const [debugging, setDebugging] = useState(false);
   const [debugResult, setDebugResult] = useState<RunNodeScriptDebugResponse>();
-
-  async function handleGenerateScript() {
-    if (!aiPrompt.trim()) {
-      message.warning("先写一句你想让脚本做什么");
-      return;
-    }
-    setGenerating(true);
-    try {
-      const result = await generateNodeScript({ prompt: aiPrompt, currentScript: script });
-      setScript(result.script);
-      message.success("脚本写好了");
-    } catch (err) {
-      message.error(friendlyError(err));
-    } finally {
-      setGenerating(false);
-    }
-  }
 
   async function handleDebugScript() {
     if (!script.trim()) {
@@ -366,17 +373,9 @@ function QuickScriptCreator({
           basicSetup={{ lineNumbers: true, foldGutter: true }}
           onChange={setScript}
         />
-        <div className="ai-helper">
-          <Input.TextArea
-            value={aiPrompt}
-            autoSize={{ minRows: 2, maxRows: 4 }}
-            placeholder="告诉 AI 你想让这个定时任务做什么，比如：每天 9 点提醒我喝水，并在日志里写时间。"
-            onChange={(event) => setAiPrompt(event.target.value)}
-          />
-          <Button icon={<RobotOutlined />} loading={generating} onClick={handleGenerateScript}>
-            AI 帮我写
-          </Button>
-        </div>
+        <Button className="quick-automation-button" icon={<RobotOutlined />} onClick={onAutomation}>
+          用一句话生成完整自动化
+        </Button>
         <div className="debug-toolbar">
           <Button icon={<PlayCircleOutlined />} loading={debugging} onClick={handleDebugScript}>
             调试运行

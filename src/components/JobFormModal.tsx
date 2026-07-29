@@ -2,7 +2,7 @@ import { DeleteOutlined, PlayCircleOutlined, PlusOutlined, RobotOutlined } from 
 import CodeMirror from "@uiw/react-codemirror";
 import { javascript } from "@codemirror/lang-javascript";
 import type { Extension } from "@codemirror/state";
-import { Button, Collapse, Form, Input, InputNumber, message, Modal, Segmented, Space, TimePicker, Typography } from "antd";
+import { Alert, Button, Collapse, Form, Input, InputNumber, message, Modal, Segmented, Space, TimePicker, Typography } from "antd";
 import type { FormInstance } from "antd";
 import dayjs from "dayjs";
 import { useEffect, useMemo, useState } from "react";
@@ -20,11 +20,13 @@ interface JobFormModalProps {
   saving: boolean;
   onCancel: () => void;
   onSubmit: (input: LaunchdJobInput) => Promise<void>;
+  draftSummary?: string;
+  draftRisks?: string[];
 }
 
 type SchedulePreset = "daily" | "monthly" | "yearly" | "interval";
 
-export function JobFormModal({ open, initialValue, saving, onCancel, onSubmit }: JobFormModalProps) {
+export function JobFormModal({ open, initialValue, saving, onCancel, onSubmit, draftSummary, draftRisks = [] }: JobFormModalProps) {
   const [form] = Form.useForm<LaunchdJobInput>();
   const [schedulePreset, setSchedulePreset] = useState<SchedulePreset>("daily");
   const executionMode = Form.useWatch(["execution", "mode"], form) as ExecutionMode | undefined;
@@ -171,7 +173,7 @@ export function JobFormModal({ open, initialValue, saving, onCancel, onSubmit }:
 
   return (
     <Modal
-      title={initialValue?.id ? "编辑任务" : "新建任务"}
+      title={initialValue?.id ? "编辑任务" : draftSummary ? "检查 AI 自动化" : "新建任务"}
       open={open}
       width={900}
       onCancel={onCancel}
@@ -181,6 +183,25 @@ export function JobFormModal({ open, initialValue, saving, onCancel, onSubmit }:
       cancelText="取消"
       destroyOnHidden
     >
+      {draftSummary && (
+        <Alert
+          className="automation-draft-alert"
+          type={draftRisks.length > 0 ? "warning" : "success"}
+          showIcon
+          title={draftSummary}
+          description={
+            draftRisks.length > 0 ? (
+              <ul>
+                {draftRisks.map((risk) => (
+                  <li key={risk}>{risk}</li>
+                ))}
+              </ul>
+            ) : (
+              "没有发现需要额外确认的风险。仍建议先调试运行一次。"
+            )
+          }
+        />
+      )}
       <Form form={form} layout="vertical" initialValues={emptyJobInput()} className="job-form">
         <Form.Item name="id" hidden>
           <Input />
