@@ -1,7 +1,7 @@
 <div align="center">
   <img src="src/assets/tick-mascot.png" width="92" alt="Tick">
   <h1>Tick</h1>
-  <p>一个给 macOS 用的定时任务应用。</p>
+  <p>一个给 macOS 用的定时任务应用，也支持用 DeepSeek 从一句话起草任务。</p>
   <p>
     <a href="https://github.com/yuxino/tick/releases/latest">下载</a>
     · <a href="#从源码运行">从源码运行</a>
