@@ -1,9 +1,5 @@
-import {
-  PlayCircleOutlined,
-  ReloadOutlined,
-  SearchOutlined,
-} from "@ant-design/icons";
-import { Button, Empty, Input, Switch, Tag, Tooltip, Typography } from "antd";
+import { PlayCircleOutlined, ReloadOutlined, SearchOutlined } from "@ant-design/icons";
+import { Button, Input, Switch, Tooltip } from "antd";
 import { useMemo, useState } from "react";
 import type { LaunchdJob } from "../types/launchd";
 import { commandSummary, scheduleSummary, statusLabel } from "../utils/launchd";
@@ -14,19 +10,10 @@ interface JobsTableProps {
   loading: boolean;
   busyId?: string;
   onSelect: (job: LaunchdJob) => void;
-  onEdit: (job: LaunchdJob) => void;
   onToggle: (job: LaunchdJob, enabled: boolean) => void;
   onRun: (job: LaunchdJob) => void;
-  onDelete: (job: LaunchdJob) => void;
   onRefresh: () => void;
 }
-
-const statusColor: Record<LaunchdJob["status"], string> = {
-  enabled: "green",
-  disabled: "default",
-  missing: "orange",
-  error: "red",
-};
 
 export function JobsTable({
   jobs,
@@ -51,76 +38,82 @@ export function JobsTable({
   }, [jobs, query]);
 
   return (
-    <div className="panel jobs-panel">
-      <div className="panel-toolbar">
+    <section className="task-ledger" aria-label="任务列表">
+      <header className="ledger-header">
         <div>
-          <Typography.Title level={4}>任务</Typography.Title>
-          <Typography.Text type="secondary">{jobs.length} 个 LaunchAgent</Typography.Text>
+          <span className="eyebrow">INDEX / {String(filteredJobs.length).padStart(2, "0")}</span>
+          <h2>全部任务</h2>
         </div>
         <Tooltip title="刷新">
-          <Button icon={<ReloadOutlined />} onClick={onRefresh} loading={loading} />
+          <Button type="text" aria-label="刷新任务列表" icon={<ReloadOutlined />} loading={loading} onClick={onRefresh} />
         </Tooltip>
-      </div>
-      <div className="job-search">
+      </header>
+
+      <div className="ledger-search">
         <Input
           allowClear
           prefix={<SearchOutlined />}
-          placeholder="搜索名称、命令或 label"
+          placeholder="搜索任务、计划或命令"
           value={query}
+          aria-label="搜索任务"
           onChange={(event) => setQuery(event.target.value)}
         />
       </div>
 
       {filteredJobs.length === 0 && !loading ? (
-        <div className="jobs-empty">
-          <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={query ? "没有匹配的任务" : "暂无任务"} />
+        <div className="ledger-empty">
+          <span>—</span>
+          <strong>{query ? "没有匹配的任务" : "还没有任务"}</strong>
+          <p>{query ? "换一个名称、label 或命令关键词试试。" : "新建一个自动化后，它会出现在这里。"}</p>
         </div>
       ) : (
-        <div className="job-list" aria-busy={loading}>
-          {filteredJobs.map((job) => (
-            <div
-              key={job.id}
-              className={`job-card ${job.id === selectedId ? "selected" : ""}`}
-              role="button"
-              tabIndex={0}
-              onClick={() => onSelect(job)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter" || event.key === " ") {
-                  event.preventDefault();
-                  onSelect(job);
-                }
-              }}
-            >
-              <div className="job-card-head">
-                <div className="job-title-block">
-                  <Typography.Text strong ellipsis>
-                    {job.name}
-                  </Typography.Text>
-                  <Typography.Text type="secondary" ellipsis className="mono-subtle">
-                    {job.label}
-                  </Typography.Text>
-                </div>
-                <Tag color={statusColor[job.status]}>{statusLabel(job.status)}</Tag>
-              </div>
+        <div className="ledger-list" role="listbox" aria-busy={loading} aria-label="任务账本">
+          {filteredJobs.map((job, index) => {
+            const selected = job.id === selectedId;
+            const busy = busyId === job.id;
 
-              <div className="job-card-actions" onClick={(event) => event.stopPropagation()}>
-                <span className="job-schedule">{scheduleSummary(job.schedule)}</span>
-                <div className="job-card-controls">
+            return (
+              <article key={job.id} className={`ledger-row ${selected ? "selected" : ""}`}>
+                <button
+                  type="button"
+                  className="ledger-select"
+                  role="option"
+                  aria-selected={selected}
+                  onClick={() => onSelect(job)}
+                >
+                  <span className="ledger-number">{String(index + 1).padStart(2, "0")}</span>
+                  <span className={`ledger-status status-${job.status}`} title={statusLabel(job.status)} />
+                  <span className="ledger-copy">
+                    <strong>{job.name}</strong>
+                    <span>{scheduleSummary(job.schedule)}</span>
+                    <code>{job.label}</code>
+                  </span>
+                </button>
+
+                <div className="ledger-row-actions">
                   <Switch
                     size="small"
                     checked={job.status === "enabled"}
-                    loading={busyId === job.id}
+                    loading={busy}
+                    aria-label={`${job.name}启用状态`}
                     onChange={(checked) => onToggle(job, checked)}
                   />
                   <Tooltip title="立即运行">
-                    <Button size="small" type="text" icon={<PlayCircleOutlined />} loading={busyId === job.id} onClick={() => onRun(job)} />
+                    <Button
+                      type="text"
+                      size="small"
+                      icon={<PlayCircleOutlined />}
+                      loading={busy}
+                      aria-label={`立即运行${job.name}`}
+                      onClick={() => onRun(job)}
+                    />
                   </Tooltip>
                 </div>
-              </div>
-            </div>
-          ))}
+              </article>
+            );
+          })}
         </div>
       )}
-    </div>
+    </section>
   );
 }
