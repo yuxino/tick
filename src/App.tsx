@@ -428,7 +428,7 @@ function ScheduleCalendar({
       <div className="calendar-grid" aria-busy={loading}>
         {days.map((day) => {
           const key = dateKey(day);
-          const dayJobs = jobsForDate(jobs, day).filter((job) => job.schedule.mode === "calendar");
+          const dayJobs = jobsForDate(jobs, day);
           const visibleJobs = dayJobs.slice(0, 3);
           const isMuted = monthKey(day) !== visibleMonth;
           const isToday = key === todayKey;
@@ -612,7 +612,7 @@ function MetadataRow({
 
 function jobsForDate(jobs: LaunchdJob[], date: Date) {
   return jobs
-    .filter((job) => jobMatchesDate(job, date))
+    .filter((job) => job.schedule.mode === "calendar" && jobMatchesDate(job, date))
     .sort((a, b) => {
       if (a.status !== b.status) return a.status === "enabled" ? -1 : 1;
       return runSortValue(a) - runSortValue(b);
@@ -621,7 +621,6 @@ function jobsForDate(jobs: LaunchdJob[], date: Date) {
 
 function jobMatchesDate(job: LaunchdJob, date: Date) {
   if (job.status === "missing" || job.status === "error") return false;
-  if (job.schedule.mode === "interval") return true;
 
   const { month, day } = job.schedule.calendar;
   const currentMonth = date.getMonth() + 1;
@@ -649,7 +648,6 @@ function formatInterval(seconds: number) {
 }
 
 function runSortValue(job: LaunchdJob) {
-  if (job.schedule.mode === "interval") return -1;
   const { hour = 0, minute = 0, second = 0 } = job.schedule.calendar;
   return hour * 3600 + minute * 60 + second;
 }

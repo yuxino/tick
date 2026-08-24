@@ -33,22 +33,8 @@ pub struct SaveDeepSeekApiKeyRequest {
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct GenerateNodeScriptRequest {
-    pub prompt: String,
-    pub current_script: Option<String>,
-}
-
-#[derive(Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct GenerateNodeScriptResponse {
-    pub script: String,
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
 pub struct GenerateAutomationRequest {
     pub prompt: String,
-    pub current_job: Option<LaunchdJobInput>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -159,46 +145,6 @@ struct DeepSeekResponseMessage {
 }
 
 #[tauri::command]
-pub async fn generate_node_script(
-    input: GenerateNodeScriptRequest,
-) -> Result<GenerateNodeScriptResponse, String> {
-    let prompt = input.prompt.trim();
-    if prompt.is_empty() {
-        return Err("先描述你希望脚本做什么".to_string());
-    }
-
-    let api_key = deepseek_api_key()?;
-    let request = DeepSeekRequest {
-        model: DEEPSEEK_MODEL.to_string(),
-        temperature: 0.2,
-        max_tokens: 1800,
-        messages: vec![
-            DeepSeekMessage {
-                role: "system".to_string(),
-                content: system_prompt(),
-            },
-            DeepSeekMessage {
-                role: "user".to_string(),
-                content: user_prompt(prompt, input.current_script.as_deref()),
-            },
-        ],
-    };
-
-    let completion = send_deepseek_request(&api_key, &request).await?;
-
-    let content = completion
-        .choices
-        .first()
-        .map(|choice| choice.message.content.trim())
-        .filter(|content| !content.is_empty())
-        .ok_or_else(|| "DeepSeek 没有返回脚本内容".to_string())?;
-
-    Ok(GenerateNodeScriptResponse {
-        script: extract_script(content),
-    })
-}
-
-#[tauri::command]
 pub async fn generate_automation(
     input: GenerateAutomationRequest,
 ) -> Result<AutomationDraft, String> {
@@ -219,7 +165,7 @@ pub async fn generate_automation(
             },
             DeepSeekMessage {
                 role: "user".to_string(),
-                content: automation_user_prompt(prompt, input.current_job.as_ref()),
+                content: automation_user_prompt(prompt),
             },
         ],
     };
@@ -406,36 +352,6 @@ fn write_debug_script(script: &str) -> Result<PathBuf, String> {
     Ok(path)
 }
 
-fn system_prompt() -> String {
-    [
-        "你是 Tick 的 Node.js 脚本助手。",
-        "用户会描述一个 macOS 定时任务，你只输出可以直接运行的 Node.js 代码。",
-        "要求：",
-        "- 只输出 JavaScript 代码，不要 Markdown，不要解释。",
-        "- 代码会由 /usr/bin/env node 执行。",
-        "- 使用 Node.js 内置模块，避免第三方依赖。",
-        "- 用户可见的提醒必须走 macOS Notification Center：用 node:child_process.execFileSync 调 /usr/bin/osascript，并执行 display notification。",
-        "- console.log 和 console.error 只会进入 Tick 的任务日志，不能代替通知、对话框或其他用户可见反馈。",
-        "- 打开 URL 或文件使用 /usr/bin/open；移到废纸篓使用 ~/.Trash 或 Finder，不要永久删除。",
-        "- 需要错误处理，把错误写到 console.error，并设置 process.exitCode = 1。",
-        "- 输出必要日志到 console.log，便于 Tick 日志面板查看。",
-        "- 不要读取密钥、token、SSH key、浏览器 cookie、钥匙串或私人文件，除非用户明确要求并限定路径。",
-    ]
-    .join("\n")
-}
-
-fn user_prompt(prompt: &str, current_script: Option<&str>) -> String {
-    let mut content = format!("用户需求：\n{prompt}");
-    if let Some(script) = current_script {
-        let script = script.trim();
-        if !script.is_empty() {
-            content.push_str("\n\n当前脚本，可按需求改写：\n");
-            content.push_str(script);
-        }
-    }
-    content
-}
-
 fn automation_system_prompt() -> String {
     [
         "你是 Tick 的 macOS 自动化规划器。把用户需求转换成一个完整 LaunchAgent 任务草稿。",
@@ -460,42 +376,12 @@ fn automation_system_prompt() -> String {
     .join("\n")
 }
 
-fn automation_user_prompt(prompt: &str, current_job: Option<&LaunchdJobInput>) -> String {
-    let mut content = format!(
+fn automation_user_prompt(prompt: &str) -> String {
+    format!(
         "今天是 {}。\n用户想要的自动化：\n{}",
         chrono::Local::now().format("%Y-%m-%d"),
         prompt
-    );
-    if let Some(job) = current_job {
-        if let Ok(json) = serde_json::to_string(job) {
-            content.push_str("\n\n当前任务草稿，可按需求修改：\n");
-            content.push_str(&json);
-        }
-    }
-    content
-}
-
-fn extract_script(content: &str) -> String {
-    let trimmed = content.trim();
-    if !trimmed.starts_with("```") {
-        return trimmed.to_string();
-    }
-
-    let mut lines = trimmed.lines();
-    let first = lines.next().unwrap_or_default();
-    if !first.starts_with("```") {
-        return trimmed.to_string();
-    }
-
-    let mut code_lines = Vec::new();
-    for line in lines {
-        if line.trim_start().starts_with("```") {
-            break;
-        }
-        code_lines.push(line);
-    }
-
-    code_lines.join("\n").trim().to_string()
+    )
 }
 
 fn extract_json(content: &str) -> String {

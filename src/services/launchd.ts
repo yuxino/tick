@@ -1,22 +1,13 @@
 import { invoke } from "@tauri-apps/api/core";
 import type { JobLog, LaunchdJob, LaunchdJobInput, LogKind } from "../types/launchd";
 
-export interface GenerateNodeScriptInput {
-  prompt: string;
-  currentScript?: string;
-}
-
-export interface GenerateNodeScriptResponse {
-  script: string;
-}
-
 export interface AutomationDraft {
   job: LaunchdJobInput;
   summary: string;
   risks: string[];
 }
 
-export interface RunNodeScriptDebugInput {
+interface RunNodeScriptDebugInput {
   script: string;
   workingDirectory?: string;
 }
@@ -65,17 +56,9 @@ export function readLaunchdPlist(id: string) {
   return invoke<string>("read_launchd_plist", { id });
 }
 
-export function printLaunchdJob(id: string) {
-  return invoke<string>("print_launchd_job", { id });
-}
-
-export function generateNodeScript(input: GenerateNodeScriptInput) {
-  return invoke<GenerateNodeScriptResponse>("generate_node_script", { input });
-}
-
-export function generateAutomation(prompt: string, currentJob?: LaunchdJobInput) {
+export function generateAutomation(prompt: string) {
   return invoke<AutomationDraft>("generate_automation", {
-    input: { prompt, currentJob },
+    input: { prompt },
   });
 }
 

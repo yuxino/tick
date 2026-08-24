@@ -164,12 +164,6 @@ pub fn read_launchd_plist(id: String) -> Result<String, String> {
     std::fs::read_to_string(job.plist_path).map_err(|err| err.to_string())
 }
 
-#[tauri::command]
-pub fn print_launchd_job(id: String) -> Result<String, String> {
-    let job = registry::find_job(&id)?;
-    launchctl::print_job(&job.label)
-}
-
 fn refresh_status(mut job: LaunchdJob) -> Result<LaunchdJob, String> {
     if !PathBuf::from(&job.plist_path).exists() {
         job.status = JobStatus::Missing;

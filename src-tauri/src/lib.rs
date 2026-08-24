@@ -8,11 +8,6 @@ use tauri::{
     AppHandle, Manager, Runtime, WebviewWindow, WindowEvent,
 };
 
-#[tauri::command]
-fn greet(name: &str) -> String {
-    format!("你好，{}！这条问候来自 Rust。", name)
-}
-
 fn show_main_window<R: Runtime>(app: &AppHandle<R>) {
     if let Some(window) = app.get_webview_window("main") {
         show_window(&window);
@@ -30,7 +25,6 @@ fn show_window<R: Runtime>(window: &WebviewWindow<R>) {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let app = tauri::Builder::default()
-        .plugin(tauri_plugin_opener::init())
         .setup(|app| {
             let show = MenuItemBuilder::with_id("show", "显示窗口").build(app)?;
             let quit = MenuItemBuilder::with_id("quit", "退出").build(app)?;
@@ -91,13 +85,11 @@ pub fn run() {
             }
         })
         .invoke_handler(tauri::generate_handler![
-            greet,
             ai::get_deepseek_config_status,
             ai::save_deepseek_api_key,
             ai::delete_deepseek_api_key,
             ai::test_deepseek_connection,
             ai::generate_automation,
-            ai::generate_node_script,
             ai::run_node_script_debug,
             launchd::commands::list_launchd_jobs,
             launchd::commands::save_launchd_job,
@@ -108,7 +100,6 @@ pub fn run() {
             launchd::commands::read_launchd_log,
             launchd::commands::clear_launchd_log,
             launchd::commands::read_launchd_plist,
-            launchd::commands::print_launchd_job,
         ])
         .build(tauri::generate_context!())
         .expect("构建 Tauri 应用时出错");

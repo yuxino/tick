@@ -2,11 +2,11 @@ export type JobStatus = "enabled" | "disabled" | "missing" | "error";
 
 export type ExecutionMode = "inline_shell" | "script_path" | "interpreter";
 
-export type ScheduleMode = "calendar" | "interval";
+type ScheduleMode = "calendar" | "interval";
 
 export type LogKind = "stdout" | "stderr";
 
-export interface CalendarSchedule {
+interface CalendarSchedule {
   month?: number;
   day?: number;
   hour?: number;
@@ -14,7 +14,7 @@ export interface CalendarSchedule {
   second: number;
 }
 
-export interface IntervalSchedule {
+interface IntervalSchedule {
   seconds: number;
 }
 

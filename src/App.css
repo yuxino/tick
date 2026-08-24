@@ -13,9 +13,7 @@
   --accent-strong: #184f43;
   --accent-soft: #dfece7;
   --warning: #a86e22;
-  --warning-soft: #f2e7d5;
   --danger: #a63d35;
-  --danger-soft: #f3dfdc;
   --focus: rgba(35, 107, 91, 0.22);
   color: var(--ink);
   font-family: "Avenir Next", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
@@ -1521,18 +1519,6 @@ button:focus-visible,
   min-width: 0;
 }
 
-.tick-mascot {
-  width: 144px;
-  pointer-events: none;
-}
-
-.tick-mascot img {
-  display: block;
-  width: 100%;
-  height: auto;
-  user-select: none;
-}
-
 @keyframes panel-enter {
   from {
     opacity: 0;
@@ -1704,37 +1690,6 @@ button:focus-visible,
 
   .schedule-shell {
     padding-bottom: 12px;
-  }
-}
-
-@media (max-width: 760px) {
-  .app-shell {
-    grid-template-columns: 64px minmax(0, 1fr);
-  }
-
-  .tasks-workbench {
-    grid-template-columns: minmax(230px, 42%) minmax(0, 1fr);
-  }
-
-  .page-date,
-  .page-heading p,
-  .page-actions .ant-btn:first-child span:not(.anticon) {
-    display: none;
-  }
-
-  .detail-specimens {
-    grid-template-columns: 1fr;
-  }
-
-  .schedule-specimen {
-    border-right: 0;
-    border-bottom: 1px solid var(--line);
-  }
-
-  .form-grid.two,
-  .schedule-picker-grid,
-  .settings-key-row {
-    grid-template-columns: 1fr;
   }
 }
 

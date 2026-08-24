@@ -7,11 +7,7 @@ use std::path::PathBuf;
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
 
-#[allow(dead_code)]
 pub struct MaterializedJob {
-    pub plist_path: PathBuf,
-    pub stdout_path: PathBuf,
-    pub stderr_path: PathBuf,
     pub wrapper_path: Option<PathBuf>,
     pub inline_script_path: Option<PathBuf>,
 }
@@ -52,9 +48,6 @@ pub fn write_job_files(job: &LaunchdJob) -> Result<MaterializedJob, String> {
         .map_err(|err| err.to_string())?;
 
     Ok(MaterializedJob {
-        plist_path,
-        stdout_path,
-        stderr_path,
         wrapper_path,
         inline_script_path,
     })
