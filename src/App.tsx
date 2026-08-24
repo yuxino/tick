@@ -162,7 +162,9 @@ function App() {
       <Header className="app-header">
         <div className="window-drag-region" data-tauri-drag-region />
         <div className="brand-block">
-          <img className="brand-mark" src={tickMascot} alt="" />
+          <span className="brand-mark-frame" aria-hidden="true">
+            <img className="brand-mark" src={tickMascot} alt="" />
+          </span>
           <div className="app-title">Tick</div>
         </div>
         <div className="header-controls">

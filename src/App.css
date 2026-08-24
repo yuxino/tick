@@ -2151,11 +2151,21 @@ body,
   min-width: 112px;
 }
 
-.brand-block .brand-mark {
+.brand-mark-frame {
   width: 27px;
   height: 27px;
-  max-width: 27px;
-  max-height: 27px;
+  flex: 0 0 27px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #ffffff;
+}
+
+.brand-block .brand-mark {
+  width: 35px;
+  height: 35px;
+  max-width: none;
+  max-height: none;
+  transform: translate(-4px, -3px);
   filter: none;
 }
 

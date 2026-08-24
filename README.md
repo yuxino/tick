@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="src/assets/tick-mascot.png" width="92" alt="Tick">
+  <img src="src-tauri/icons/128x128@2x.png" width="92" alt="Tick">
   <h1>Tick</h1>
   <p>一个给 macOS 用的定时任务应用，也支持用 DeepSeek 从一句话起草任务。</p>
   <p>

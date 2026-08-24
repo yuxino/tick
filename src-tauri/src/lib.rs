@@ -47,6 +47,7 @@ pub fn run() {
 
             TrayIconBuilder::new()
                 .icon(icon)
+                .icon_as_template(true)
                 .tooltip("Tick 定时任务")
                 .menu(&menu)
                 .on_menu_event(|app, event| match event.id().as_ref() {
