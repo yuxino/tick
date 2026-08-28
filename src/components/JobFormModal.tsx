@@ -345,7 +345,7 @@ function ScheduleComposer({
 
             <Form.Item label="几点运行">
               <TimePicker
-                value={dayjs(timeInputValue(schedule), "HH:mm:ss")}
+                value={timePickerValue(schedule)}
                 format="HH:mm:ss"
                 className="full-width"
                 onChange={(_, timeString) => onTimeChange(typeof timeString === "string" ? timeString : "00:00:00")}
@@ -557,9 +557,9 @@ function detectSchedulePreset(schedule: LaunchdSchedule): SchedulePreset {
   return "daily";
 }
 
-function timeInputValue(schedule: LaunchdSchedule) {
+function timePickerValue(schedule: LaunchdSchedule) {
   const { hour = 0, minute = 0, second = 0 } = schedule.calendar;
-  return `${pad(hour)}:${pad(minute)}:${pad(second)}`;
+  return dayjs().hour(hour).minute(minute).second(second).millisecond(0);
 }
 
 function yearlyDateInputValue(schedule: LaunchdSchedule) {

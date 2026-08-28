@@ -23,14 +23,13 @@ pub fn save_launchd_job(input: LaunchdJobInput) -> Result<LaunchdJob, String> {
     validate_job_input(&input)?;
     ensure_dirs()?;
 
-    let existing = input
-        .id
-        .as_deref()
-        .and_then(|id| registry::find_job(id).ok());
+    let existing = match input.id.as_deref() {
+        Some(id) => Some(registry::find_job(id)?),
+        None => None,
+    };
     let id = existing
         .as_ref()
         .map(|job| job.id.clone())
-        .or(input.id.clone())
         .unwrap_or_else(make_id);
     let label = existing
         .as_ref()

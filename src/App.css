@@ -137,7 +137,6 @@ button:focus-visible,
 }
 
 .rail-section-label,
-.eyebrow,
 .specimen-label {
   color: var(--faint);
   font-size: 9px;

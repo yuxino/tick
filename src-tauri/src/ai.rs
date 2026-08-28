@@ -199,7 +199,7 @@ pub async fn run_node_script_debug(
     let script_path = write_debug_script(script)?;
     let started_at = Instant::now();
     let mut command = TokioCommand::new("/usr/bin/env");
-    command.arg("node").arg(&script_path);
+    command.kill_on_drop(true).arg("node").arg(&script_path);
 
     if let Some(directory) = input.working_directory.as_deref().map(str::trim) {
         if !directory.is_empty() {
@@ -346,9 +346,19 @@ fn write_debug_script(script: &str) -> Result<PathBuf, String> {
     let timestamp = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map_err(|err| err.to_string())?
-        .as_millis();
-    let path = std::env::temp_dir().join(format!("tick-debug-{timestamp}.js"));
-    std::fs::write(&path, format!("{script}\n")).map_err(|err| err.to_string())?;
+        .as_nanos();
+    let path =
+        std::env::temp_dir().join(format!("tick-debug-{}-{timestamp}.js", std::process::id()));
+    let mut options = OpenOptions::new();
+    options.create_new(true).write(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.mode(0o600);
+    }
+    let mut file = options.open(&path).map_err(|err| err.to_string())?;
+    file.write_all(format!("{script}\n").as_bytes())
+        .map_err(|err| err.to_string())?;
     Ok(path)
 }
 
