@@ -1,7 +1,7 @@
 <div align="center">
-  <img src="src-tauri/icons/128x128@2x.png" width="92" alt="Tick">
+  <img src="public/tick-icon.png" width="96" alt="Tick">
   <h1>Tick</h1>
-  <p>一个简单的 macOS LaunchAgent 定时任务工具。</p>
+  <p>把 macOS LaunchAgent 变成看得懂、改得动的定时任务。</p>
   <p>
     <a href="https://github.com/yuxino/tick/releases/latest">下载</a>
     · <a href="#开发">从源码运行</a>
@@ -9,18 +9,18 @@
   </p>
 </div>
 
-![Tick 主界面](docs/images/tick-overview.jpg)
+![Tick 主界面](docs/images/tick-overview.png)
 
-## 功能
+## 能做什么
 
-- 创建、编辑、启停和立即运行定时任务
-- 按日期、时间或固定间隔运行
-- 编写 Node.js，或运行现有 `.js` 文件
-- 保存前调试脚本
-- 查看日程、stdout、stderr 和 plist
-- 可选使用 DeepSeek 从一句话生成任务草稿
+- 创建、编辑、暂停、立即运行和删除任务
+- 按日期、时间或固定间隔调度
+- 直接编写 Node.js，或运行已有 `.js` 文件
+- 保存前试跑脚本，查看 stdout、stderr 与 plist
+- 在月历中检查固定时间任务
+- 可选用 DeepSeek 从一句话生成可编辑草稿
 
-Tick 只管理自己创建的用户级 LaunchAgent，不会修改系统 daemon。
+Tick 只管理自己创建的用户级 LaunchAgent，不会修改系统 daemon。AI 生成的内容不会直接执行，保存前仍可检查和修改。
 
 ## 本地数据
 
@@ -30,7 +30,7 @@ Tick 只管理自己创建的用户级 LaunchAgent，不会修改系统 daemon�
 | 脚本和日志 | `~/Library/Application Support/tick/` |
 | DeepSeek API Key | `~/Library/Application Support/com.gavin.tick/settings.json` |
 
-DeepSeek 完全可选。API Key 文件权限为 `0600`，但仍是本机明文文件，可随时在设置中删除。
+DeepSeek 完全可选。API Key 文件权限为 `0600`，但仍是本机明文文件，可随时在设置中删除；不用 DeepSeek 时，Tick 不需要任何 API Key。
 
 ## 开发
 
@@ -41,7 +41,7 @@ npm install
 npm run tauri dev
 ```
 
-检查：
+检查代码：
 
 ```bash
 npm run build

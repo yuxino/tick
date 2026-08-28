@@ -41,8 +41,8 @@ export function JobsTable({
     <section className="task-ledger" aria-label="任务列表">
       <header className="ledger-header">
         <div>
-          <span className="eyebrow">INDEX / {String(filteredJobs.length).padStart(2, "0")}</span>
-          <h2>全部任务</h2>
+          <h2>任务</h2>
+          <span className="ledger-count">{filteredJobs.length} 个</span>
         </div>
         <Tooltip title="刷新">
           <Button type="text" aria-label="刷新任务列表" icon={<ReloadOutlined />} loading={loading} onClick={onRefresh} />

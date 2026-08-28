@@ -163,13 +163,11 @@ function App() {
 
   const viewCopy = activeView === "tasks"
     ? {
-        eyebrow: "AUTOMATION LEDGER",
-        title: "任务账本",
-        description: `${enabledCount} 个任务正在按计划运行`,
+        title: "定时任务",
+        description: `共 ${jobs.length} 个任务，${enabledCount} 个正在运行`,
       }
     : {
-        eyebrow: "SCHEDULE INDEX",
-        title: "运行日程",
+        title: "任务日程",
         description: "用日历检查固定时间任务的分布",
       };
 
@@ -191,7 +189,6 @@ function App() {
       <main className="app-main">
         <header className="page-header">
           <div className="page-heading">
-            <span className="eyebrow">{viewCopy.eyebrow}</span>
             <div className="page-title-row">
               <h1>{viewCopy.title}</h1>
               <span className="page-date">
@@ -305,11 +302,9 @@ function AppRail({
   return (
     <aside className="control-rail">
       <div className="rail-brand" aria-label="Tick">
-        <span className="rail-logo-frame" aria-hidden="true">
-          <img src={tickMascot} alt="" />
-        </span>
+        <img className="rail-logo" src={tickMascot} alt="" aria-hidden="true" />
         <div>
-          <strong>tick</strong>
+          <strong>Tick</strong>
           <span>时间调度器</span>
         </div>
       </div>
@@ -340,10 +335,10 @@ function AppRail({
       </nav>
 
       <div className="rail-index" aria-label="任务状态摘要">
-        <span className="rail-section-label">运行索引</span>
-        <div><i className="index-dot enabled" />正在运行 <strong>{enabled}</strong></div>
-        <div><i className="index-dot paused" />已经暂停 <strong>{paused}</strong></div>
-        <div><i className="index-dot attention" />需要处理 <strong>{attention}</strong></div>
+        <span className="rail-section-label">任务状态</span>
+        <div><i className="index-dot enabled" />运行中 <strong>{enabled}</strong></div>
+        <div><i className="index-dot paused" />已暂停 <strong>{paused}</strong></div>
+        <div><i className="index-dot attention" />需处理 <strong>{attention}</strong></div>
       </div>
 
       <div className="rail-footer">
@@ -366,7 +361,6 @@ function EmptyTasks({ onCreate, onManual }: { onCreate: () => void; onManual: ()
         <img src={tickMascot} alt="" />
         <span>00:00</span>
       </div>
-      <span className="eyebrow">YOUR FIRST AUTOMATION</span>
       <h2>让 Mac 按时替你做事</h2>
       <p>描述一件需要重复完成的事情，或直接填写运行时间与脚本。保存前你仍然可以检查和试跑。</p>
       <div className="empty-actions">
@@ -405,7 +399,6 @@ function ScheduleCalendar({
     <section className="schedule-shell">
       <div className="planner-toolbar">
         <div>
-          <span className="eyebrow">MONTHLY FIELD</span>
           <h2>{monthDate.toLocaleDateString("zh-CN", { year: "numeric", month: "long" })}</h2>
         </div>
         <div className="planner-context">

@@ -12,15 +12,15 @@ ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
       locale={zhCN}
       theme={{
         token: {
-          borderRadius: 5,
-          colorBgContainer: "#fffefa",
-          colorBorder: "#d8d5cd",
-          colorError: "#a63d35",
-          colorPrimary: "#236b5b",
-          colorText: "#1b1d1a",
-          colorTextSecondary: "#6d716b",
-          controlHeight: 34,
-          fontFamily: "\"Avenir Next\", \"PingFang SC\", \"Hiragino Sans GB\", \"Microsoft YaHei\", sans-serif",
+          borderRadius: 7,
+          colorBgContainer: "#ffffff",
+          colorBorder: "#d9d9d6",
+          colorError: "#b2463d",
+          colorPrimary: "#20201f",
+          colorText: "#20201f",
+          colorTextSecondary: "#6f6f6b",
+          controlHeight: 32,
+          fontFamily: "-apple-system, BlinkMacSystemFont, \"SF Pro Text\", \"PingFang SC\", \"Hiragino Sans GB\", sans-serif",
           fontSize: 13,
         },
         components: {
@@ -30,12 +30,12 @@ ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
             primaryShadow: "none",
           },
           Modal: {
-            borderRadiusLG: 10,
+            borderRadiusLG: 12,
           },
           Tabs: {
-            inkBarColor: "#236b5b",
-            itemActiveColor: "#184f43",
-            itemSelectedColor: "#184f43",
+            inkBarColor: "#20201f",
+            itemActiveColor: "#20201f",
+            itemSelectedColor: "#20201f",
           },
         },
       }}
