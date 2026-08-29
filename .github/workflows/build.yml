@@ -21,10 +21,10 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
@@ -56,10 +56,10 @@ jobs:
           file "$app_path/Contents/MacOS/$executable" | grep -F 'Mach-O 64-bit executable arm64'
 
       - name: Upload app bundles
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: tick-macos-bundles
-          path: src-tauri/target/release/bundle/**
+          path: src-tauri/target/release/bundle/dmg/*.dmg
           if-no-files-found: error
 
       - name: Create draft release
@@ -72,4 +72,4 @@ jobs:
           body: macOS build for Tick.
           draft: true
           prerelease: false
-          files: src-tauri/target/release/bundle/**
+          files: src-tauri/target/release/bundle/dmg/*.dmg
