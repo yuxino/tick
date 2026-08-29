@@ -10,6 +10,8 @@
 
 ## 本地开发
 
+以下开发流程仅在 Apple 芯片（M 系列、arm64）Mac 上验证；Intel Mac 尚未验证，不在当前支持范围内。
+
 ```bash
 npm install
 npm run tauri dev

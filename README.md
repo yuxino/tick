@@ -34,7 +34,7 @@ DeepSeek 完全可选。使用时，任务描述和 API Key 会发送到 `api.de
 
 ## 开发
 
-需要 macOS、Node.js 22、Rust 和 Xcode Command Line Tools。
+需要 macOS、Node.js 22、Rust 和 Xcode Command Line Tools。当前 CI 只验证 Apple 芯片（M 系列、arm64）Mac，构建产物也仅提供 arm64；Intel Mac（包括从源码运行）尚未验证，不在当前支持范围内。
 
 ```bash
 npm install
@@ -53,6 +53,6 @@ npm run check
 npm run tauri build
 ```
 
-Tick 目前只支持 macOS。公开的 [v0.1.0 安装包](https://github.com/yuxino/tick/releases/tag/v0.1.0) 仅支持 Apple 芯片（M 系列）Mac 和 macOS 11 或更高版本，不支持 Intel Mac；它早于当前 `main`，应用包签名不完整，也没有 Developer ID 签名或 Apple 公证，因此只作为旧版存档。要使用当前版本，请从源码运行。贡献说明见 [CONTRIBUTING.md](CONTRIBUTING.md)，安全问题请使用 [私密漏洞报告](https://github.com/yuxino/tick/security/advisories/new)。
+Tick 目前只支持 macOS。公开的 [v0.1.0 安装包](https://github.com/yuxino/tick/releases/tag/v0.1.0) 仅支持 Apple 芯片（M 系列）Mac 和 macOS 11 或更高版本，不支持 Intel Mac；它早于当前 `main`，应用包签名不完整，也没有 Developer ID 签名或 Apple 公证，因此只作为旧版存档。要在 Apple 芯片 Mac 上使用当前版本，请从源码运行。贡献说明见 [CONTRIBUTING.md](CONTRIBUTING.md)，安全问题请使用 [私密漏洞报告](https://github.com/yuxino/tick/security/advisories/new)。
 
 [MIT](LICENSE) © 2026 [yuxino](https://github.com/yuxino)
