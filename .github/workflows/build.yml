@@ -46,6 +46,15 @@ jobs:
       - name: Build Tauri bundles
         run: npm run tauri build
 
+      - name: Verify macOS app bundle
+        run: |
+          set -euo pipefail
+          app_path="$(find src-tauri/target/release/bundle/macos -maxdepth 1 -type d -name '*.app' -print -quit)"
+          test -n "$app_path"
+          codesign --verify --deep --strict --verbose=2 "$app_path"
+          executable="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$app_path/Contents/Info.plist")"
+          file "$app_path/Contents/MacOS/$executable" | grep -F 'Mach-O 64-bit executable arm64'
+
       - name: Upload app bundles
         uses: actions/upload-artifact@v4
         with:
