@@ -31,6 +31,8 @@ jobs:
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
 
       - name: Cache Rust dependencies
         uses: swatinem/rust-cache@v2
@@ -40,8 +42,8 @@ jobs:
       - name: Install frontend dependencies
         run: npm ci
 
-      - name: Build frontend
-        run: npm run build
+      - name: Check code
+        run: npm run check
 
       - name: Build Tauri bundles
         run: npm run tauri build

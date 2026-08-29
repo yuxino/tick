@@ -18,10 +18,7 @@ npm run tauri dev
 提交前请运行：
 
 ```bash
-npm run build
-cd src-tauri
-cargo fmt --check
-cargo test
+npm run check
 ```
 
 ## 提交 Pull Request

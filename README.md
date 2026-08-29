@@ -44,8 +44,7 @@ npm run tauri dev
 检查代码：
 
 ```bash
-npm run build
-cargo test --manifest-path src-tauri/Cargo.toml
+npm run check
 ```
 
 构建应用：
