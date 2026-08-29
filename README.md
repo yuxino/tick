@@ -54,6 +54,6 @@ cargo test --manifest-path src-tauri/Cargo.toml
 npm run tauri build
 ```
 
-Tick 目前只支持 macOS。公开的 [v0.1.0 安装包](https://github.com/yuxino/tick/releases/tag/v0.1.0) 仅支持 Apple silicon，早于当前 `main`，没有 Developer ID 签名，也未经过 Apple 公证；要使用当前版本，请从源码运行。贡献说明见 [CONTRIBUTING.md](CONTRIBUTING.md)，安全问题请使用 [私密漏洞报告](https://github.com/yuxino/tick/security/advisories/new)。
+Tick 目前只支持 macOS。公开的 [v0.1.0 安装包](https://github.com/yuxino/tick/releases/tag/v0.1.0) 仅支持 Apple 芯片（M 系列）Mac 和 macOS 11 或更高版本，不支持 Intel Mac；它早于当前 `main`，没有 Developer ID 签名，也未经过 Apple 公证。要使用当前版本，请从源码运行。贡献说明见 [CONTRIBUTING.md](CONTRIBUTING.md)，安全问题请使用 [私密漏洞报告](https://github.com/yuxino/tick/security/advisories/new)。
 
 [MIT](LICENSE) © 2026 [yuxino](https://github.com/yuxino)
