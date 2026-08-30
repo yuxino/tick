@@ -21,9 +21,9 @@
 
 v0.1.1 候选复核绑定提交 `b9269d6320609623ec1478f930a59a2ea184ade1`。重新安装后，Node.js 和已保存的 DeepSeek 配置都能恢复；再次真实输入“1分钟后提示我”可进入可编辑审阅表单，显示 60 秒重复风险，并生成通过 `TICK_EXECUTABLE --show-message` 调用 Tick 原生弹窗的脚本。候选包随后通过保存、启用、立即运行、原生弹窗、停止当前实例和删除烟雾测试。
 
-tag workflow run `33325494880` 生成的 draft x64 安装器另行下载到共享目录并在同一 Guest 安装。该精确资产再次通过 DeepSeek 审阅、保存、启用、原生弹窗、停止、删除、托盘退出和卸载回归；卸载后程序目录不存在、Tick 系统任务数为 0，未勾选删除应用数据时设置按设计保留。发布为 [v0.1.1](https://github.com/yuxino/tick/releases/tag/v0.1.1) 并设为 Latest 后，又从公开地址重新下载 x64 安装器和 `SHA256SUMS.txt`；公开安装器与 draft 逐字节一致，文件大小和 SHA-256 均与上表及清单一致。
+tag workflow run `33325494880` 的 Windows x64 job artifact 被下载到共享目录并在同一 Guest 安装。该精确资产再次通过 DeepSeek 审阅、保存、启用、原生弹窗、停止、删除、托盘退出和卸载回归；卸载后程序目录不存在、Tick 系统任务数为 0，未勾选删除应用数据时设置按设计保留。同一次 run 生成的 draft Release x64 安装器随后另行下载，并确认与已安装的 job artifact 逐字节一致。发布为 [v0.1.1](https://github.com/yuxino/tick/releases/tag/v0.1.1) 并设为 Latest 后，又从公开地址重新下载 x64 安装器和 `SHA256SUMS.txt`；公开安装器也与 draft 及已安装的 job artifact 逐字节一致，因此没有重复安装公开下载件。文件大小和 SHA-256 均与上表及清单一致。
 
-该 Release 恰好包含四项资产：x64 安装器、ARM64 安装器、Apple 芯片 DMG 和 `SHA256SUMS.txt`。清单自身 SHA-256 为 `c5ef6908f3802bd4697a2af51c8323141af4d281091547db8e5f2026c5a14410`；清单记录的 ARM64 安装器为 `4e8f8180303eb7d2e8a5a1ee1f51e815bb6c112de0d75bab21827e66c7bdaaaf`，DMG 为 `a40124ea293d426bbb6114480f9d0c854bca9601447ef8f719b14a368c89eef4`，x64 安装器为上表的 `c5c0115326ccaad4a62b4226be2b102ec532e7fe738d64010db3515265a93418`。这里对 ARM64 安装器和 DMG 只做发布清单与托管资产摘要核对，不把它们算作本页的 Guest 交互证据。
+该 Release 恰好包含四项上传资产：x64 安装器、ARM64 安装器、Apple 芯片 DMG 和 `SHA256SUMS.txt`；GitHub 自动提供的源码归档不计入此数。清单自身 SHA-256 为 `c5ef6908f3802bd4697a2af51c8323141af4d281091547db8e5f2026c5a14410`；清单记录的 ARM64 安装器为 `4e8f8180303eb7d2e8a5a1ee1f51e815bb6c112de0d75bab21827e66c7bdaaaf`，DMG 为 `a40124ea293d426bbb6114480f9d0c854bca9601447ef8f719b14a368c89eef4`，x64 安装器为上表的 `c5c0115326ccaad4a62b4226be2b102ec532e7fe738d64010db3515265a93418`。这里对 ARM64 安装器和 DMG 只做发布清单与托管资产摘要核对，不把它们算作本页的 Guest 交互证据。
 
 ## Windows Guest 实测结果
 
@@ -31,7 +31,7 @@ tag workflow run `33325494880` 生成的 draft x64 安装器另行下载到共�
 | --- | --- | --- |
 | 安装、启动、卸载项 | 通过 | 当前用户安装，无 UAC；启动主界面正常，程序和功能中显示 Tick。 |
 | Node.js 检测 | 通过 | 检测到用户已安装的 Node.js `v24.19.0` 与实际可执行文件；Tick 没有安装 Node.js，也没有修改 PATH。 |
-| API Key 保存与调用 | 通过 | Key 只以掩码显示；重装后仍可读取，DeepSeek 连接测试成功。验收未记录 Key、尾号或响应正文。 |
+| API Key 持久化读取与调用 | 通过 | 既有 Key 只以掩码显示；保留应用数据重装后仍可读取，DeepSeek 连接与任务生成成功。本轮未输入、替换或删除真实 Key；覆盖写与原子替换由自动化回归覆盖。验收未记录 Key、尾号或响应正文。 |
 | “1分钟后提示我” | 通过 | AI 草稿使用 Tick 内置原生提示命令，审阅后保存为每 60 秒任务；这是重复提醒，不是一次性提醒。 |
 | Task Scheduler 注册 | 通过 | 创建、启用和读取均成功；注册后 URI 被规范化为带前导反斜杠的形式，Principal 被规范化为 SID，Tick 仍以当前进程 token SID 判断为同一所有者。 |
 | 真实定时触发 | 通过 | 单独等待真实 60 秒边界后出现标题为 `Tick`、正文为“时间到了”的原生 Windows 弹窗；不是用“立即运行”替代。 |
