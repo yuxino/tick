@@ -1,6 +1,6 @@
 [package]
 name = "tick"
-version = "0.1.0"
+version = "0.1.1"
 description = "A native scheduler for macOS and Windows"
 authors = ["yuxino"]
 edition = "2021"

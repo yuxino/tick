@@ -12,7 +12,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   build:
@@ -63,18 +63,6 @@ jobs:
           name: tick-macos-bundles
           path: src-tauri/target/release/bundle/dmg/*.dmg
           if-no-files-found: error
-
-      - name: Create draft release
-        if: startsWith(github.ref, 'refs/tags/')
-        uses: softprops/action-gh-release@v2
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          name: Tick ${{ github.ref_name }}
-          body: macOS build for Tick.
-          draft: true
-          prerelease: false
-          files: src-tauri/target/release/bundle/dmg/*.dmg
 
   windows:
     name: Build Windows ${{ matrix.arch }} installer
@@ -190,3 +178,76 @@ jobs:
             src-tauri/target/release/bundle/nsis/SHA256SUMS.txt
           if-no-files-found: error
           retention-days: 7
+
+  release:
+    name: Assemble draft release
+    if: startsWith(github.ref, 'refs/tags/')
+    needs:
+      - build
+      - windows
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download macOS bundle
+        uses: actions/download-artifact@v8
+        with:
+          name: tick-macos-bundles
+          path: release-input/macos
+
+      - name: Download Windows x64 installer
+        uses: actions/download-artifact@v8
+        with:
+          name: tick-windows-x64
+          path: release-input/windows-x64
+
+      - name: Download Windows ARM64 installer
+        uses: actions/download-artifact@v8
+        with:
+          name: tick-windows-arm64
+          path: release-input/windows-arm64
+
+      - name: Verify and assemble release assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+          mapfile -t dmgs < <(find release-input/macos -type f -name "Tick_${version}_aarch64.dmg" -print)
+          mapfile -t x64_installers < <(find release-input/windows-x64 -type f -name "Tick_${version}_x64-setup.exe" -print)
+          mapfile -t arm64_installers < <(find release-input/windows-arm64 -type f -name "Tick_${version}_arm64-setup.exe" -print)
+          test "${#dmgs[@]}" -eq 1
+          test "${#x64_installers[@]}" -eq 1
+          test "${#arm64_installers[@]}" -eq 1
+
+          mkdir -p release-assets
+          for file in "${dmgs[0]}" "${x64_installers[0]}" "${arm64_installers[0]}"; do
+            filename="$(basename "$file")"
+            cp "$file" "release-assets/$filename"
+          done
+          (
+            cd release-assets
+            sha256sum -- * | LC_ALL=C sort -k2 > SHA256SUMS.txt
+            sha256sum -c SHA256SUMS.txt
+          )
+
+      - name: Upload assembled release assets
+        uses: actions/upload-artifact@v7
+        with:
+          name: tick-release-assets
+          path: release-assets/*
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Create draft release
+        uses: softprops/action-gh-release@v3
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          name: Tick ${{ github.ref_name }}
+          tag_name: ${{ github.ref_name }}
+          generate_release_notes: true
+          draft: true
+          prerelease: false
+          fail_on_unmatched_files: true
+          files: release-assets/*

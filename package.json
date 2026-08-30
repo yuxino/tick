@@ -1,15 +1,16 @@
 {
   "name": "tick",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.1.1",
   "type": "module",
   "scripts": {
     "branding:verify": "node scripts/verify-app-branding.mjs Tick",
     "dev": "vite",
     "build": "npm run branding:verify && tsc && vite build",
-    "check": "cargo fmt --manifest-path src-tauri/Cargo.toml -- --check && cargo clippy --manifest-path src-tauri/Cargo.toml --locked -- -D warnings && cargo test --manifest-path src-tauri/Cargo.toml --locked && npm run test:path-privacy && npm run build",
+    "check": "npm run version:verify && cargo fmt --manifest-path src-tauri/Cargo.toml -- --check && cargo clippy --manifest-path src-tauri/Cargo.toml --locked -- -D warnings && cargo test --manifest-path src-tauri/Cargo.toml --locked && npm run test:path-privacy && npm run build",
     "build:windows": "node scripts/build-windows.mjs",
     "test:path-privacy": "node --test scripts/scan-binary-paths.test.mjs",
+    "version:verify": "node scripts/verify-version.mjs",
     "preview": "vite preview",
     "tauri": "tauri"
   },
