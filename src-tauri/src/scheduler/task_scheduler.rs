@@ -643,7 +643,7 @@ mod tests {
         assert_eq!(status(&job).unwrap(), JobStatus::Disabled);
 
         let id = job.id.clone();
-        let registered_principal = with_root(move |root, _| unsafe {
+        let (connected_identity, registered_principal) = with_root(move |root, identity| unsafe {
             let task = root
                 .GetTask(&BSTR::from(task_name(&id)?.as_str()))
                 .map_err(|err| format_windows_error("读取 Windows 所有权测试任务失败", err))?;
@@ -657,10 +657,14 @@ mod tests {
             principal
                 .UserId(&mut user_id)
                 .map_err(|err| format_windows_error("读取 Windows 所有权测试账户 SID 失败", err))?;
-            Ok(user_id.to_string())
+            Ok((identity, user_id.to_string()))
         })
         .unwrap();
-        assert!(registered_principal.starts_with("S-"));
+        assert!(!registered_principal.trim().is_empty());
+
+        let connected_sid = resolve_account_sid(&connected_identity).unwrap();
+        let registered_sid = resolve_account_sid(&registered_principal).unwrap();
+        assert!(unsafe { EqualSid(connected_sid.as_psid(), registered_sid.as_psid()).is_ok() });
         assert!(principal_matches(&registered_principal).unwrap());
 
         enable(&job).expect("failed to enable owned Windows task");
