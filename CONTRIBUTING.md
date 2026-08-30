@@ -24,6 +24,14 @@ npm run tauri dev
 npm run check
 ```
 
+Windows release/installer builds must use:
+
+```bash
+npm run build:windows -- --bundles nsis -- --locked
+```
+
+This keeps Rust panic locations for diagnostics while remapping the build machine's home, Cargo cache, and checkout prefixes out of shipped binaries. CI extracts the NSIS payload and rejects ASCII or UTF-16 user-home paths in both copies of `tick.exe`.
+
 ## 提交 Pull Request
 
 1. 先搜索已有 Issue 和 Pull Request，避免重复工作。

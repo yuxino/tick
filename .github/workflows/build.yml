@@ -75,3 +75,118 @@ jobs:
           draft: true
           prerelease: false
           files: src-tauri/target/release/bundle/dmg/*.dmg
+
+  windows:
+    name: Build Windows ${{ matrix.arch }} installer
+    runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x64
+            runner: windows-2025
+            expectedMachine: 34404
+          - arch: arm64
+            runner: windows-11-arm
+            expectedMachine: 43620
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Cache Rust dependencies
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+          shared-key: windows-${{ matrix.arch }}
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Check code
+        run: npm run check
+
+      - name: Build privacy-preserving Windows installer
+        run: node scripts/build-windows.mjs --bundles nsis -- --locked
+
+      - name: Verify executable, installer payload, and embedded paths
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $releaseExe = (Resolve-Path 'src-tauri/target/release/Tick.exe').Path
+          $installers = @(Get-ChildItem 'src-tauri/target/release/bundle/nsis' -File -Filter '*-setup.exe')
+          if ($installers.Count -ne 1) {
+            throw "Expected exactly one NSIS installer, found $($installers.Count)."
+          }
+
+          $extractDir = Join-Path $env:RUNNER_TEMP 'tick-nsis-payload'
+          New-Item -ItemType Directory -Force -Path $extractDir | Out-Null
+          & 7z x $installers[0].FullName "-o$extractDir" -y | Out-Host
+          if ($LASTEXITCODE -ne 0) {
+            throw "7-Zip failed to extract the NSIS installer."
+          }
+
+          $payloads = @(Get-ChildItem $extractDir -Recurse -File -Filter 'Tick.exe')
+          if ($payloads.Count -ne 1) {
+            throw "Expected exactly one Tick.exe in the NSIS payload, found $($payloads.Count)."
+          }
+
+          function Get-PeMachine([string]$Path) {
+            $stream = [System.IO.File]::OpenRead($Path)
+            try {
+              $reader = [System.IO.BinaryReader]::new($stream)
+              $stream.Position = 0x3c
+              $peOffset = $reader.ReadInt32()
+              $stream.Position = $peOffset
+              if ($reader.ReadUInt32() -ne 0x00004550) {
+                throw "Missing PE signature: $Path"
+              }
+              return $reader.ReadUInt16()
+            } finally {
+              $stream.Dispose()
+            }
+          }
+
+          foreach ($binary in @($releaseExe, $payloads[0].FullName)) {
+            $machine = Get-PeMachine $binary
+            if ($machine -ne ${{ matrix.expectedMachine }}) {
+              throw "Expected ${{ matrix.arch }} PE machine, found 0x$($machine.ToString('X4')) in $binary."
+            }
+          }
+
+          node scripts/scan-binary-paths.mjs $releaseExe $payloads[0].FullName $installers[0].FullName
+          if ($LASTEXITCODE -ne 0) {
+            throw "Build-machine user paths were embedded in a Windows artifact."
+          }
+
+          $hashes = @(
+            Get-FileHash -Algorithm SHA256 $releaseExe
+            Get-FileHash -Algorithm SHA256 $payloads[0].FullName
+            Get-FileHash -Algorithm SHA256 $installers[0].FullName
+          )
+          $hashes | ForEach-Object { "$($_.Hash.ToLowerInvariant())  $($_.Path)" } |
+            Set-Content -Encoding ascii 'src-tauri/target/release/bundle/nsis/SHA256SUMS.txt'
+
+      - name: Upload Windows ${{ matrix.arch }} installer
+        uses: actions/upload-artifact@v7
+        with:
+          name: tick-windows-${{ matrix.arch }}
+          path: |
+            src-tauri/target/release/Tick.exe
+            src-tauri/target/release/bundle/nsis/*-setup.exe
+            src-tauri/target/release/bundle/nsis/SHA256SUMS.txt
+          if-no-files-found: error
+          retention-days: 7
