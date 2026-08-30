@@ -1,22 +1,24 @@
 import { Button, Input, Modal, Space, Typography, message } from "antd";
 import { useState } from "react";
-import { generateAutomation, type AutomationDraft } from "../services/launchd";
+import { generateAutomation, type AutomationDraft } from "../services/scheduler";
+import type { SchedulerCapabilities } from "../types/scheduler";
 import { friendlyError } from "../utils/errors";
 
 interface AutomationModalProps {
   open: boolean;
+  capabilities: SchedulerCapabilities;
   onCancel: () => void;
   onManual: () => void;
   onGenerated: (draft: AutomationDraft) => void;
 }
 
-export function AutomationModal({ open, onCancel, onManual, onGenerated }: AutomationModalProps) {
+export function AutomationModal({ open, capabilities, onCancel, onManual, onGenerated }: AutomationModalProps) {
   const [prompt, setPrompt] = useState("");
   const [generating, setGenerating] = useState(false);
 
   async function generate() {
     if (!prompt.trim()) {
-      message.warning("先说说你想让 Mac 自动做什么");
+      message.warning(`先说说你想让 ${capabilities.computerLabel} 自动做什么`);
       return;
     }
     setGenerating(true);
@@ -57,7 +59,7 @@ export function AutomationModal({ open, onCancel, onManual, onGenerated }: Autom
           value={prompt}
           autoFocus
           autoSize={{ minRows: 4, maxRows: 8 }}
-          placeholder="例如：每天晚上 11 点，把下载目录里超过 30 天的安装包移到废纸篓，完成后发一条通知。"
+          placeholder={`例如：每天晚上 11 点，把下载目录里超过 30 天的安装包移到${capabilities.trashLabel}，完成后发一条通知。`}
           onChange={(event) => setPrompt(event.target.value)}
         />
       </div>

@@ -42,7 +42,25 @@ pub fn bootout(label: &str, plist_path: &Path) -> Result<(), String> {
     Ok(())
 }
 
-pub fn print_job(label: &str) -> Result<String, String> {
+pub fn is_loaded(label: &str) -> Result<bool, String> {
     let target = format!("{}/{}", gui_target(), label);
-    run_launchctl(&["print".to_string(), target])
+    let output = Command::new("launchctl")
+        .args(["print", &target])
+        .output()
+        .map_err(|err| err.to_string())?;
+    if output.status.success() {
+        return Ok(true);
+    }
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    let combined = format!("{stdout}\n{stderr}").to_ascii_lowercase();
+    if output.status.code() == Some(113)
+        || combined.contains("could not find service")
+        || combined.contains("service not found")
+    {
+        Ok(false)
+    } else {
+        Err(combined.trim().to_string())
+    }
 }

@@ -4,26 +4,27 @@ import CodeMirror from "@uiw/react-codemirror";
 import { Alert, Button, Space, Tooltip, Typography } from "antd";
 import { useCallback, useEffect, useState } from "react";
 import { tickEditorTheme } from "../editorTheme";
-import { readLaunchdPlist } from "../services/launchd";
-import type { LaunchdJob } from "../types/launchd";
+import { readJobDefinition } from "../services/scheduler";
+import type { ScheduledJob, SchedulerCapabilities } from "../types/scheduler";
 import { friendlyError } from "../utils/errors";
 import { displayPath } from "../utils/paths";
 
-interface PlistPanelProps {
-  job?: LaunchdJob;
+interface DefinitionPanelProps {
+  job?: ScheduledJob;
+  capabilities: SchedulerCapabilities;
 }
 
-export function PlistPanel({ job }: PlistPanelProps) {
+export function DefinitionPanel({ job, capabilities }: DefinitionPanelProps) {
   const [content, setContent] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string>();
 
-  const loadPlist = useCallback(async () => {
+  const loadDefinition = useCallback(async () => {
     if (!job) return;
     setLoading(true);
     setError(undefined);
     try {
-      setContent(await readLaunchdPlist(job.id));
+      setContent(await readJobDefinition(job.id));
     } catch (err) {
       setError(friendlyError(err));
       setContent("");
@@ -34,21 +35,21 @@ export function PlistPanel({ job }: PlistPanelProps) {
 
   useEffect(() => {
     setContent("");
-    loadPlist();
-  }, [loadPlist]);
+    loadDefinition();
+  }, [loadDefinition]);
 
   if (!job) {
-    return <div className="empty-detail">选择一个任务查看 plist 配置。</div>;
+    return <div className="empty-detail">选择一个任务查看 {capabilities.definitionLabel}。</div>;
   }
 
   return (
     <Space orientation="vertical" size={12} className="full-width">
       <div className="panel-toolbar compact">
         <Typography.Text type="secondary" className="path-line">
-          {displayPath(job.plistPath)}
+          {displayPath(job.definitionPath, capabilities.homeDirectory)}
         </Typography.Text>
-        <Tooltip title="刷新 plist">
-          <Button icon={<ReloadOutlined />} onClick={loadPlist} loading={loading} />
+        <Tooltip title={`刷新 ${capabilities.definitionLabel}`}>
+          <Button icon={<ReloadOutlined />} onClick={loadDefinition} loading={loading} />
         </Tooltip>
       </div>
       {error && <Alert type="error" title={error} showIcon />}

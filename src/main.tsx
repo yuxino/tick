@@ -20,7 +20,7 @@ ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
           colorText: "#20201f",
           colorTextSecondary: "#6f6f6b",
           controlHeight: 32,
-          fontFamily: "-apple-system, BlinkMacSystemFont, \"SF Pro Text\", \"PingFang SC\", \"Hiragino Sans GB\", sans-serif",
+          fontFamily: "-apple-system, BlinkMacSystemFont, \"Segoe UI\", \"SF Pro Text\", \"PingFang SC\", \"Microsoft YaHei\", \"Hiragino Sans GB\", sans-serif",
           fontSize: 13,
         },
         components: {

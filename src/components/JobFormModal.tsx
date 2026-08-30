@@ -6,32 +6,42 @@ import { Alert, Button, Collapse, Form, Input, InputNumber, message, Modal, Segm
 import type { FormInstance } from "antd";
 import dayjs from "dayjs";
 import { useEffect, useMemo, useState } from "react";
-import type { ExecutionMode, LaunchdExecution, LaunchdJobInput, LaunchdSchedule } from "../types/launchd";
-import { runNodeScriptDebug } from "../services/launchd";
-import type { RunNodeScriptDebugResponse } from "../services/launchd";
+import type { ExecutionMode, JobExecution, JobSchedule, ScheduledJobInput, SchedulerCapabilities } from "../types/scheduler";
+import { runNodeScriptDebug } from "../services/scheduler";
+import type { RunNodeScriptDebugResponse } from "../services/scheduler";
 import { ScriptDebugPanel } from "./ScriptDebugPanel";
 import { tickEditorTheme } from "../editorTheme";
 import { friendlyError } from "../utils/errors";
-import { defaultExecution, defaultSchedule, emptyJobInput } from "../utils/launchd";
+import { defaultExecution, defaultSchedule, emptyJobInput } from "../utils/scheduler";
 
 interface JobFormModalProps {
   open: boolean;
-  initialValue?: LaunchdJobInput;
+  initialValue?: ScheduledJobInput;
+  capabilities: SchedulerCapabilities;
   saving: boolean;
   onCancel: () => void;
-  onSubmit: (input: LaunchdJobInput) => Promise<void>;
+  onSubmit: (input: ScheduledJobInput) => Promise<void>;
   draftSummary?: string;
   draftRisks?: string[];
 }
 
 type SchedulePreset = "daily" | "monthly" | "yearly" | "interval";
 
-export function JobFormModal({ open, initialValue, saving, onCancel, onSubmit, draftSummary, draftRisks = [] }: JobFormModalProps) {
-  const [form] = Form.useForm<LaunchdJobInput>();
+export function JobFormModal({
+  open,
+  initialValue,
+  capabilities,
+  saving,
+  onCancel,
+  onSubmit,
+  draftSummary,
+  draftRisks = [],
+}: JobFormModalProps) {
+  const [form] = Form.useForm<ScheduledJobInput>();
   const [schedulePreset, setSchedulePreset] = useState<SchedulePreset>("daily");
   const executionMode = Form.useWatch(["execution", "mode"], form) as ExecutionMode | undefined;
-  const schedule = Form.useWatch("schedule", form) as LaunchdSchedule | undefined;
-  const execution = Form.useWatch("execution", form) as LaunchdExecution | undefined;
+  const schedule = Form.useWatch("schedule", form) as JobSchedule | undefined;
+  const execution = Form.useWatch("execution", form) as JobExecution | undefined;
   const inlineScript = Form.useWatch(["execution", "inlineScript"], form) as string | undefined;
   const workingDirectory = Form.useWatch(["execution", "workingDirectory"], form) as string | undefined;
 
@@ -39,31 +49,31 @@ export function JobFormModal({ open, initialValue, saving, onCancel, onSubmit, d
 
   useEffect(() => {
     if (open) {
-      const nextValue = initialValue ?? emptyJobInput();
+      const nextValue = initialValue ?? emptyJobInput(capabilities);
       form.setFieldsValue(nextValue);
       setSchedulePreset(detectSchedulePreset(nextValue.schedule));
     }
-  }, [form, initialValue, open]);
+  }, [capabilities, form, initialValue, open]);
 
   async function handleOk() {
     await form.validateFields();
-    const values = form.getFieldsValue(true) as LaunchdJobInput;
+    const values = form.getFieldsValue(true) as ScheduledJobInput;
     await onSubmit(values);
   }
 
   const previewSchedule = schedule ?? defaultSchedule;
-  const previewExecution = execution ?? defaultExecution;
+  const previewExecution = execution ?? defaultExecution(capabilities);
   const currentExecutionMode = (executionMode ?? previewExecution.mode ?? "inline_shell") as ExecutionMode;
 
   function getSchedule() {
     return form.getFieldValue("schedule") ?? defaultSchedule;
   }
 
-  function updateSchedule(nextSchedule: LaunchdSchedule) {
+  function updateSchedule(nextSchedule: JobSchedule) {
     form.setFieldsValue({ schedule: nextSchedule });
   }
 
-  function updateCalendar(patch: Partial<LaunchdSchedule["calendar"]>) {
+  function updateCalendar(patch: Partial<JobSchedule["calendar"]>) {
     const current = getSchedule();
     updateSchedule({
       ...current,
@@ -155,7 +165,7 @@ export function JobFormModal({ open, initialValue, saving, onCancel, onSubmit, d
       execution: {
         ...previewExecution,
         mode: nextMode,
-        interpreter: nextMode === "inline_shell" ? "/usr/bin/env node" : previewExecution.interpreter || "/usr/bin/env node",
+        interpreter: nextMode === "inline_shell" ? capabilities.defaultInterpreter : previewExecution.interpreter || capabilities.defaultInterpreter,
       },
     });
   }
@@ -197,7 +207,7 @@ export function JobFormModal({ open, initialValue, saving, onCancel, onSubmit, d
           }
         />
       )}
-      <Form form={form} layout="vertical" initialValues={emptyJobInput()} className="job-form">
+      <Form form={form} layout="vertical" initialValues={emptyJobInput(capabilities)} className="job-form">
         <Form.Item name="id" hidden>
           <Input />
         </Form.Item>
@@ -242,6 +252,7 @@ export function JobFormModal({ open, initialValue, saving, onCancel, onSubmit, d
               <ScheduleComposer
                 preset={schedulePreset}
                 schedule={previewSchedule}
+                capabilities={capabilities}
                 onPresetChange={changeSchedulePreset}
                 onCalendarChange={updateCalendar}
                 onIntervalChange={(seconds) => updateSchedule({ ...getSchedule(), mode: "interval", interval: { seconds } })}
@@ -256,12 +267,13 @@ export function JobFormModal({ open, initialValue, saving, onCancel, onSubmit, d
                 mode={currentExecutionMode}
                 currentScript={inlineScript ?? previewExecution.inlineScript}
                 workingDirectory={workingDirectory}
+                scriptPathExample={capabilities.scriptPathExample}
                 extensions={extensions}
                 onModeChange={changeExecutionMode}
               />
             </section>
 
-            <AdvancedSettings form={form} mode={currentExecutionMode} />
+            <AdvancedSettings form={form} mode={currentExecutionMode} capabilities={capabilities} />
           </div>
 
         </div>
@@ -273,6 +285,7 @@ export function JobFormModal({ open, initialValue, saving, onCancel, onSubmit, d
 function ScheduleComposer({
   preset,
   schedule,
+  capabilities,
   onPresetChange,
   onCalendarChange,
   onIntervalChange,
@@ -280,9 +293,10 @@ function ScheduleComposer({
   onYearlyDateChange,
 }: {
   preset: SchedulePreset;
-  schedule: LaunchdSchedule;
+  schedule: JobSchedule;
+  capabilities: SchedulerCapabilities;
   onPresetChange: (preset: SchedulePreset) => void;
-  onCalendarChange: (patch: Partial<LaunchdSchedule["calendar"]>) => void;
+  onCalendarChange: (patch: Partial<JobSchedule["calendar"]>) => void;
   onIntervalChange: (seconds: number) => void;
   onTimeChange: (value: string) => void;
   onYearlyDateChange: (value: string) => void;
@@ -306,9 +320,23 @@ function ScheduleComposer({
           <Form.Item
             name={["schedule", "interval", "seconds"]}
             label="间隔"
-            rules={[{ required: true, type: "number", min: 1, message: "间隔至少 1 秒" }]}
+            rules={[
+              {
+                required: true,
+                type: "number",
+                min: capabilities.minimumIntervalSeconds,
+                max: capabilities.maximumIntervalSeconds,
+                message: intervalRuleMessage(capabilities),
+              },
+            ]}
           >
-            <InputNumber min={1} precision={0} addonAfter="秒" className="full-width" />
+            <InputNumber
+              min={capabilities.minimumIntervalSeconds}
+              max={capabilities.maximumIntervalSeconds}
+              precision={0}
+              addonAfter="秒"
+              className="full-width"
+            />
           </Form.Item>
           <QuickButtonRow
             options={[
@@ -316,7 +344,7 @@ function ScheduleComposer({
               { label: "5 分钟", value: 300 },
               { label: "15 分钟", value: 900 },
               { label: "1 小时", value: 3600 },
-            ]}
+            ].filter(({ value }) => supportsInterval(value, capabilities))}
             onSelect={onIntervalChange}
           />
         </div>
@@ -371,12 +399,14 @@ function ScriptComposer({
   mode,
   currentScript,
   workingDirectory,
+  scriptPathExample,
   extensions,
   onModeChange,
 }: {
   mode: ExecutionMode;
   currentScript: string;
   workingDirectory?: string;
+  scriptPathExample: string;
   extensions: Extension[];
   onModeChange: (mode: ExecutionMode) => void;
 }) {
@@ -437,7 +467,7 @@ function ScriptComposer({
             label="Node.js 文件"
             rules={[{ required: true, whitespace: true, message: "请输入脚本路径" }]}
           >
-            <Input placeholder="/Users/gavin/scripts/job.js" />
+            <Input placeholder={scriptPathExample} />
           </Form.Item>
         </div>
       )}
@@ -445,7 +475,15 @@ function ScriptComposer({
   );
 }
 
-function AdvancedSettings({ form, mode }: { form: FormInstance<LaunchdJobInput>; mode: ExecutionMode }) {
+function AdvancedSettings({
+  form,
+  mode,
+  capabilities,
+}: {
+  form: FormInstance<ScheduledJobInput>;
+  mode: ExecutionMode;
+  capabilities: SchedulerCapabilities;
+}) {
   return (
     <Collapse
       ghost
@@ -461,7 +499,7 @@ function AdvancedSettings({ form, mode }: { form: FormInstance<LaunchdJobInput>;
                 label="Node 命令"
                 rules={mode === "interpreter" ? [{ required: true, whitespace: true, message: "请输入解释器路径" }] : undefined}
               >
-                <Input placeholder="/usr/bin/env node" />
+                <Input placeholder={capabilities.defaultInterpreter} />
               </Form.Item>
 
               {mode !== "inline_shell" && (
@@ -471,7 +509,7 @@ function AdvancedSettings({ form, mode }: { form: FormInstance<LaunchdJobInput>;
               )}
 
               <Form.Item name={["execution", "workingDirectory"]} label="工作目录">
-                <Input placeholder="/Users/gavin/project" />
+                <Input placeholder={capabilities.workingDirectoryExample} />
               </Form.Item>
 
               <div className="advanced-subsection">
@@ -550,19 +588,19 @@ function CodeEditor({
   );
 }
 
-function detectSchedulePreset(schedule: LaunchdSchedule): SchedulePreset {
+function detectSchedulePreset(schedule: JobSchedule): SchedulePreset {
   if (schedule.mode === "interval") return "interval";
   if (schedule.calendar.month && schedule.calendar.day) return "yearly";
   if (schedule.calendar.day) return "monthly";
   return "daily";
 }
 
-function timePickerValue(schedule: LaunchdSchedule) {
+function timePickerValue(schedule: JobSchedule) {
   const { hour = 0, minute = 0, second = 0 } = schedule.calendar;
   return dayjs().hour(hour).minute(minute).second(second).millisecond(0);
 }
 
-function yearlyDateInputValue(schedule: LaunchdSchedule) {
+function yearlyDateInputValue(schedule: JobSchedule) {
   const now = new Date();
   const month = schedule.calendar.month ?? now.getMonth() + 1;
   const day = schedule.calendar.day ?? now.getDate();
@@ -571,4 +609,22 @@ function yearlyDateInputValue(schedule: LaunchdSchedule) {
 
 function pad(value: number) {
   return String(value).padStart(2, "0");
+}
+
+function supportsInterval(seconds: number, capabilities: SchedulerCapabilities) {
+  return seconds >= capabilities.minimumIntervalSeconds
+    && (capabilities.maximumIntervalSeconds === undefined || seconds <= capabilities.maximumIntervalSeconds);
+}
+
+function intervalRuleMessage(capabilities: SchedulerCapabilities) {
+  const minimum = formatIntervalSeconds(capabilities.minimumIntervalSeconds);
+  if (capabilities.maximumIntervalSeconds === undefined) return `间隔至少 ${minimum}`;
+  return `间隔需在 ${minimum} 至 ${formatIntervalSeconds(capabilities.maximumIntervalSeconds)} 之间`;
+}
+
+function formatIntervalSeconds(seconds: number) {
+  if (seconds % 86400 === 0) return `${seconds / 86400} 天`;
+  if (seconds % 3600 === 0) return `${seconds / 3600} 小时`;
+  if (seconds % 60 === 0) return `${seconds / 60} 分钟`;
+  return `${seconds} 秒`;
 }

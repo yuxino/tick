@@ -1,17 +1,17 @@
 import { PlayCircleOutlined, ReloadOutlined, SearchOutlined } from "@ant-design/icons";
 import { Button, Input, Switch, Tooltip } from "antd";
 import { useMemo, useState } from "react";
-import type { LaunchdJob } from "../types/launchd";
-import { commandSummary, scheduleSummary, statusLabel } from "../utils/launchd";
+import type { ScheduledJob } from "../types/scheduler";
+import { commandSummary, scheduleSummary, statusLabel } from "../utils/scheduler";
 
 interface JobsTableProps {
-  jobs: LaunchdJob[];
+  jobs: ScheduledJob[];
   selectedId?: string;
   loading: boolean;
   busyId?: string;
-  onSelect: (job: LaunchdJob) => void;
-  onToggle: (job: LaunchdJob, enabled: boolean) => void;
-  onRun: (job: LaunchdJob) => void;
+  onSelect: (job: ScheduledJob) => void;
+  onToggle: (job: ScheduledJob, enabled: boolean) => void;
+  onRun: (job: ScheduledJob) => void;
   onRefresh: () => void;
 }
 
@@ -64,7 +64,7 @@ export function JobsTable({
         <div className="ledger-empty">
           <span>—</span>
           <strong>{query ? "没有匹配的任务" : "还没有任务"}</strong>
-          <p>{query ? "换一个名称、label 或命令关键词试试。" : "新建一个自动化后，它会出现在这里。"}</p>
+          <p>{query ? "换一个名称、标识或命令关键词试试。" : "新建一个自动化后，它会出现在这里。"}</p>
         </div>
       ) : (
         <div className="ledger-list" role="listbox" aria-busy={loading} aria-label="任务账本">

@@ -2,20 +2,22 @@ import { ClearOutlined, ReloadOutlined } from "@ant-design/icons";
 import CodeMirror from "@uiw/react-codemirror";
 import { Alert, Button, Popconfirm, Space, Switch, Tabs, Tooltip, Typography } from "antd";
 import { useCallback, useEffect, useState } from "react";
-import { clearLaunchdLog, readLaunchdLog } from "../services/launchd";
+import { clearScheduledJobLog, readScheduledJobLog } from "../services/scheduler";
 import { tickEditorTheme } from "../editorTheme";
-import type { JobLog, LaunchdJob, LogKind } from "../types/launchd";
+import type { JobLog, LogKind, ScheduledJob } from "../types/scheduler";
 import { friendlyError } from "../utils/errors";
 import { displayPath } from "../utils/paths";
 
 interface LogsPanelProps {
-  job?: LaunchdJob;
+  job?: ScheduledJob;
+  homeDirectory: string;
 }
 
-export function LogsPanel({ job }: LogsPanelProps) {
+export function LogsPanel({ job, homeDirectory }: LogsPanelProps) {
   const [kind, setKind] = useState<LogKind>("stdout");
   const [log, setLog] = useState<JobLog>();
   const [loading, setLoading] = useState(false);
+  const [clearing, setClearing] = useState(false);
   const [autoRefresh, setAutoRefresh] = useState(true);
   const [error, setError] = useState<string>();
 
@@ -24,7 +26,7 @@ export function LogsPanel({ job }: LogsPanelProps) {
     setLoading(true);
     setError(undefined);
     try {
-      setLog(await readLaunchdLog(job.id, kind));
+      setLog(await readScheduledJobLog(job.id, kind));
     } catch (err) {
       setError(friendlyError(err));
     } finally {
@@ -45,8 +47,16 @@ export function LogsPanel({ job }: LogsPanelProps) {
 
   async function handleClear() {
     if (!job) return;
-    await clearLaunchdLog(job.id, kind);
-    await loadLog();
+    setClearing(true);
+    setError(undefined);
+    try {
+      await clearScheduledJobLog(job.id, kind);
+      await loadLog();
+    } catch (err) {
+      setError(friendlyError(err));
+    } finally {
+      setClearing(false);
+    }
   }
 
   if (!job) {
@@ -72,7 +82,7 @@ export function LogsPanel({ job }: LogsPanelProps) {
           </Tooltip>
           <Popconfirm title="清空这份日志？" okText="清空" cancelText="取消" onConfirm={handleClear}>
             <Tooltip title="清空日志">
-              <Button icon={<ClearOutlined />} />
+              <Button icon={<ClearOutlined />} loading={clearing} />
             </Tooltip>
           </Popconfirm>
         </Space>
@@ -82,7 +92,7 @@ export function LogsPanel({ job }: LogsPanelProps) {
       {log?.truncated && <Alert type="warning" title="日志文件太大，当前只显示末尾内容。" showIcon />}
 
       <Typography.Text type="secondary" className="path-line">
-        {displayPath(log?.path ?? (kind === "stdout" ? job.stdoutPath : job.stderrPath))}
+        {displayPath(log?.path ?? (kind === "stdout" ? job.stdoutPath : job.stderrPath), homeDirectory)}
       </Typography.Text>
       <CodeMirror
         value={log?.content ?? ""}

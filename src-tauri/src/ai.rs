@@ -1,5 +1,5 @@
-use crate::launchd::models::LaunchdJobInput;
-use crate::launchd::validation::validate_job_input;
+use crate::scheduler::models::ScheduledJobInput;
+use crate::scheduler::validation::validate_job_input;
 use serde::{Deserialize, Serialize};
 use std::fs::OpenOptions;
 use std::io::Write;
@@ -40,7 +40,7 @@ pub struct GenerateAutomationRequest {
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AutomationDraft {
-    pub job: LaunchdJobInput,
+    pub job: ScheduledJobInput,
     pub summary: String,
     pub risks: Vec<String>,
 }
@@ -150,7 +150,7 @@ pub async fn generate_automation(
 ) -> Result<AutomationDraft, String> {
     let prompt = input.prompt.trim();
     if prompt.is_empty() {
-        return Err("先描述你想让 Mac 自动做什么".to_string());
+        return Err("先描述你想让电脑自动做什么".to_string());
     }
 
     let api_key = deepseek_api_key()?;
@@ -180,7 +180,7 @@ pub async fn generate_automation(
     let draft = serde_json::from_str::<AutomationDraft>(&extract_json(content))
         .map_err(|_| "DeepSeek 返回的任务格式不完整，请换一种说法再试".to_string())?;
     validate_job_input(&draft.job).map_err(|err| format!("AI 生成的任务无法使用：{err}"))?;
-    if draft.job.execution.mode != crate::launchd::models::ExecutionMode::InlineShell {
+    if draft.job.execution.mode != crate::scheduler::models::ExecutionMode::InlineShell {
         return Err("AI 生成了 Tick 暂不支持自动创建的脚本类型，请重试".to_string());
     }
     validate_native_capabilities(prompt, &draft.job.execution.inline_script)?;
@@ -198,8 +198,15 @@ pub async fn run_node_script_debug(
 
     let script_path = write_debug_script(script)?;
     let started_at = Instant::now();
-    let mut command = TokioCommand::new("/usr/bin/env");
-    command.kill_on_drop(true).arg("node").arg(&script_path);
+    #[cfg(target_os = "macos")]
+    let mut command = {
+        let mut command = TokioCommand::new("/usr/bin/env");
+        command.arg("node");
+        command
+    };
+    #[cfg(target_os = "windows")]
+    let mut command = TokioCommand::new("node.exe");
+    command.kill_on_drop(true).arg(&script_path);
 
     if let Some(directory) = input.working_directory.as_deref().map(str::trim) {
         if !directory.is_empty() {
@@ -362,6 +369,7 @@ fn write_debug_script(script: &str) -> Result<PathBuf, String> {
     Ok(path)
 }
 
+#[cfg(target_os = "macos")]
 fn automation_system_prompt() -> String {
     [
         "你是 Tick 的 macOS 自动化规划器。把用户需求转换成一个完整 LaunchAgent 任务草稿。",
@@ -380,6 +388,29 @@ fn automation_system_prompt() -> String {
         "- 文件路径使用用户给出的绝对路径；没给路径时不要猜私人目录，写入 risks 并用安全的占位逻辑。",
         "- 删除操作默认移到废纸篓，不要永久删除；在 risks 中明确列出会修改、移动或联网的行为。",
         "- 不读取钥匙串、SSH key、浏览器 cookie 或其他密钥。",
+        "- 脚本要有错误处理、console.log/console.error，并设置 process.exitCode。",
+        "- risks 没有风险时返回空数组。job.id 不要输出。",
+    ]
+    .join("\n")
+}
+
+#[cfg(target_os = "windows")]
+fn automation_system_prompt() -> String {
+    [
+        "你是 Tick 的 Windows 自动化规划器。把用户需求转换成一个完整的当前用户计划任务草稿。",
+        "只输出 JSON，不要 Markdown，不要解释。JSON 必须严格符合以下结构：",
+        r#"{"job":{"name":"任务名","description":"一句话说明","schedule":{"mode":"calendar","calendar":{"month":null,"day":null,"hour":9,"minute":0,"second":0},"interval":{"seconds":3600}},"execution":{"mode":"inline_shell","inlineScript":"可直接由 Node.js 执行的 JavaScript","scriptPath":"","interpreter":"node.exe","arguments":"","workingDirectory":"","environment":[]}},"summary":"这个自动化会做什么","risks":["风险或权限提示"]}"#,
+        "规则：",
+        "- schedule.mode 只能是 calendar 或 interval；interval.seconds 必须在 60 到 2678400 之间。",
+        "- 用户没说时间时，默认每天 09:00，并在 risks 中说明这个假设。",
+        "- execution.mode 必须是 inline_shell，脚本必须是完整 Node.js JavaScript，只使用内置模块。",
+        "- 调用 Windows 程序时只使用 node:child_process 的 execFile/execFileSync 和参数数组，禁止拼接 cmd、PowerShell 或其他 shell 命令。",
+        "- console.log/console.error 只写入 Tick 的 stdout/stderr 日志，绝不能把它们当成用户通知。",
+        "- 用户要求打开网页、文件或应用时，可用 explorer.exe 和参数数组。",
+        "- 用户要求通知、回收站删除或其他无法仅靠 Node.js 内置模块可靠完成的原生行为时，不要伪造实现；在 risks 中明确写出未实现部分。",
+        "- summary 中声称完成的每一项行为，都必须能在 inlineScript 中找到对应实现。",
+        "- 文件路径使用用户给出的绝对路径；没给路径时不要猜私人目录，写入 risks 并使用安全的占位逻辑。",
+        "- 不读取凭据管理器、SSH key、浏览器 cookie 或其他密钥。",
         "- 脚本要有错误处理、console.log/console.error，并设置 process.exitCode。",
         "- risks 没有风险时返回空数组。job.id 不要输出。",
     ]
@@ -409,6 +440,7 @@ fn extract_json(content: &str) -> String {
         .to_string()
 }
 
+#[cfg(target_os = "macos")]
 fn validate_native_capabilities(prompt: &str, script: &str) -> Result<(), String> {
     let asks_for_notification = [
         "提醒我",
@@ -426,6 +458,11 @@ fn validate_native_capabilities(prompt: &str, script: &str) -> Result<(), String
     if asks_for_notification && !implements_notification {
         return Err("AI 只生成了日志，没有真正调用 macOS 系统通知；请重试生成".to_string());
     }
+    Ok(())
+}
+
+#[cfg(target_os = "windows")]
+fn validate_native_capabilities(_prompt: &str, _script: &str) -> Result<(), String> {
     Ok(())
 }
 
@@ -455,6 +492,7 @@ mod tests {
         assert_eq!(mask_api_key("abcdefghijkl"), "••••ijkl");
     }
 
+    #[cfg(target_os = "macos")]
     #[test]
     fn rejects_console_log_as_a_notification_substitute() {
         assert!(validate_native_capabilities("每天提醒我喝水", "console.log('喝水')").is_err());

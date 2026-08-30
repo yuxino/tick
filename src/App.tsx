@@ -18,33 +18,43 @@ import { AutomationModal } from "./components/AutomationModal";
 import { JobFormModal } from "./components/JobFormModal";
 import { JobsTable } from "./components/JobsTable";
 import { LogsPanel } from "./components/LogsPanel";
-import { PlistPanel } from "./components/PlistPanel";
+import { DefinitionPanel } from "./components/DefinitionPanel";
 import { SettingsModal } from "./components/SettingsModal";
 import {
-  deleteLaunchdJob,
-  disableLaunchdJob,
-  enableLaunchdJob,
-  listLaunchdJobs,
-  runLaunchdJobNow,
-  saveLaunchdJob,
-} from "./services/launchd";
-import type { AutomationDraft } from "./services/launchd";
-import type { LaunchdJob, LaunchdJobInput } from "./types/launchd";
+  deleteScheduledJob,
+  disableScheduledJob,
+  enableScheduledJob,
+  getSchedulerCapabilities,
+  listScheduledJobs,
+  runScheduledJobNow,
+  saveScheduledJob,
+} from "./services/scheduler";
+import type { AutomationDraft } from "./services/scheduler";
+import type { ScheduledJob, ScheduledJobInput, SchedulerCapabilities } from "./types/scheduler";
 import { friendlyError } from "./utils/errors";
-import { commandSummary, emptyJobInput, scheduleSummary, statusLabel, toJobInput } from "./utils/launchd";
+import {
+  commandSummary,
+  emptyJobInput,
+  fallbackSchedulerCapabilities,
+  scheduleSummary,
+  statusLabel,
+  toJobInput,
+} from "./utils/scheduler";
 import { displayPath } from "./utils/paths";
 
 type MainView = "tasks" | "schedule";
 
 function App() {
-  const [jobs, setJobs] = useState<LaunchdJob[]>([]);
+  const [jobs, setJobs] = useState<ScheduledJob[]>([]);
+  const [capabilities, setCapabilities] = useState<SchedulerCapabilities>(fallbackSchedulerCapabilities);
+  const [capabilitiesReady, setCapabilitiesReady] = useState(false);
   const [selectedId, setSelectedId] = useState<string>();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [busyId, setBusyId] = useState<string>();
   const [error, setError] = useState<string>();
   const [formOpen, setFormOpen] = useState(false);
-  const [editingJob, setEditingJob] = useState<LaunchdJob>();
+  const [editingJob, setEditingJob] = useState<ScheduledJob>();
   const [activeView, setActiveView] = useState<MainView>("tasks");
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [automationOpen, setAutomationOpen] = useState(false);
@@ -61,31 +71,58 @@ function App() {
   const loadJobs = useCallback(async () => {
     setLoading(true);
     setError(undefined);
-    try {
-      const nextJobs = await listLaunchdJobs();
+    const [capabilitiesResult, jobsResult] = await Promise.allSettled([
+      getSchedulerCapabilities(),
+      listScheduledJobs(),
+    ]);
+    const errors: string[] = [];
+
+    if (capabilitiesResult.status === "fulfilled") {
+      const nextCapabilities = capabilitiesResult.value;
+      setCapabilities(nextCapabilities);
+      setCapabilitiesReady(true);
+    } else {
+      errors.push(`无法读取任务调度器信息：${friendlyError(capabilitiesResult.reason)}`);
+    }
+
+    if (jobsResult.status === "fulfilled") {
+      const nextJobs = jobsResult.value;
       setJobs(nextJobs);
       setSelectedId((current) => {
         if (current && nextJobs.some((job) => job.id === current)) return current;
         return nextJobs[0]?.id;
       });
-    } catch (err) {
-      setError(friendlyError(err));
-    } finally {
-      setLoading(false);
+    } else {
+      errors.push(`无法读取任务列表：${friendlyError(jobsResult.reason)}`);
     }
+
+    setError(errors.length > 0 ? errors.join("；") : undefined);
+    setLoading(false);
   }, []);
 
   useEffect(() => {
     loadJobs();
   }, [loadJobs]);
 
+  function openAutomation() {
+    if (!capabilitiesReady) {
+      message.warning(loading ? "任务调度器仍在加载，请稍后重试" : "任务调度器信息加载失败，请先刷新");
+      return;
+    }
+    setAutomationOpen(true);
+  }
+
   function openCreate() {
+    if (!capabilitiesReady) {
+      message.warning(loading ? "任务调度器仍在加载，请稍后重试" : "任务调度器信息加载失败，请先刷新");
+      return;
+    }
     setEditingJob(undefined);
     setAutomationDraft(undefined);
     setFormOpen(true);
   }
 
-  function openEdit(job: LaunchdJob) {
+  function openEdit(job: ScheduledJob) {
     setEditingJob(job);
     setAutomationDraft(undefined);
     setFormOpen(true);
@@ -98,10 +135,10 @@ function App() {
     setFormOpen(true);
   }
 
-  async function handleSave(input: LaunchdJobInput) {
+  async function handleSave(input: ScheduledJobInput) {
     setSaving(true);
     try {
-      const saved = await saveLaunchdJob(input);
+      const saved = await saveScheduledJob(input);
       message.success("任务已保存");
       setFormOpen(false);
       setEditingJob(undefined);
@@ -115,7 +152,7 @@ function App() {
     }
   }
 
-  async function withBusy(job: LaunchdJob, action: () => Promise<void>, success: string) {
+  async function withBusy(job: ScheduledJob, action: () => Promise<void>, success: string) {
     setBusyId(job.id);
     try {
       await action();
@@ -124,33 +161,39 @@ function App() {
       setSelectedId(job.id);
     } catch (err) {
       message.error(friendlyError(err));
+      await loadJobs();
+      setSelectedId(job.id);
     } finally {
       setBusyId(undefined);
     }
   }
 
-  function handleToggle(job: LaunchdJob, enabled: boolean) {
+  function handleToggle(job: ScheduledJob, enabled: boolean) {
     withBusy(
       job,
       async () => {
         if (enabled) {
-          await enableLaunchdJob(job.id);
+          await enableScheduledJob(job.id);
         } else {
-          await disableLaunchdJob(job.id);
+          await disableScheduledJob(job.id);
         }
       },
-      enabled ? "任务已启用" : "任务已停用",
+      enabled
+        ? "任务调度已启用"
+        : capabilities.platform === "windows"
+          ? "任务调度已停用，当前运行已停止"
+          : "任务调度已停用",
     );
   }
 
-  function handleRun(job: LaunchdJob) {
-    withBusy(job, () => runLaunchdJobNow(job.id), "任务已启动");
+  function handleRun(job: ScheduledJob) {
+    withBusy(job, () => runScheduledJobNow(job.id), "任务已启动");
   }
 
-  async function handleDelete(job: LaunchdJob) {
+  async function handleDelete(job: ScheduledJob) {
     setBusyId(job.id);
     try {
-      await deleteLaunchdJob(job.id);
+      await deleteScheduledJob(job.id);
       message.success("任务已删除");
       await loadJobs();
       setSelectedId(undefined);
@@ -164,7 +207,7 @@ function App() {
   const viewCopy = activeView === "tasks"
     ? {
         title: "定时任务",
-        description: `共 ${jobs.length} 个任务，${enabledCount} 个正在运行`,
+        description: `共 ${jobs.length} 个任务，${enabledCount} 个已启用`,
       }
     : {
         title: "任务日程",
@@ -182,7 +225,7 @@ function App() {
         paused={pausedCount}
         attention={attentionCount}
         onChangeView={setActiveView}
-        onCreate={() => setAutomationOpen(true)}
+        onCreate={openAutomation}
         onSettings={() => setSettingsOpen(true)}
       />
 
@@ -201,7 +244,7 @@ function App() {
             <Button aria-label="刷新任务" icon={<ReloadOutlined />} loading={loading} onClick={loadJobs}>
               刷新
             </Button>
-            <Button type="primary" icon={<PlusOutlined />} onClick={() => setAutomationOpen(true)}>
+            <Button type="primary" icon={<PlusOutlined />} onClick={openAutomation}>
               新建任务
             </Button>
           </div>
@@ -220,7 +263,7 @@ function App() {
               }}
             />
           ) : jobs.length === 0 && !loading ? (
-            <EmptyTasks onCreate={() => setAutomationOpen(true)} onManual={openCreate} />
+            <EmptyTasks capabilities={capabilities} onCreate={openAutomation} onManual={openCreate} />
           ) : (
             <div className="tasks-workbench">
               <JobsTable
@@ -238,6 +281,7 @@ function App() {
                 {selectedJob ? (
                   <DetailPanel
                     job={selectedJob}
+                    capabilities={capabilities}
                     busy={busyId === selectedJob.id}
                     onToggle={handleToggle}
                     onRun={handleRun}
@@ -255,7 +299,8 @@ function App() {
 
       <JobFormModal
         open={formOpen}
-        initialValue={editingJob ? toJobInput(editingJob) : automationDraft?.job ?? emptyJobInput()}
+        initialValue={editingJob ? toJobInput(editingJob) : automationDraft?.job ?? emptyJobInput(capabilities)}
+        capabilities={capabilities}
         saving={saving}
         draftSummary={automationDraft?.summary}
         draftRisks={automationDraft?.risks}
@@ -268,6 +313,7 @@ function App() {
       />
       <AutomationModal
         open={automationOpen}
+        capabilities={capabilities}
         onCancel={() => setAutomationOpen(false)}
         onManual={() => {
           setAutomationOpen(false);
@@ -336,8 +382,8 @@ function AppRail({
 
       <div className="rail-index" aria-label="任务状态摘要">
         <span className="rail-section-label">任务状态</span>
-        <div><i className="index-dot enabled" />运行中 <strong>{enabled}</strong></div>
-        <div><i className="index-dot paused" />已暂停 <strong>{paused}</strong></div>
+        <div><i className="index-dot enabled" />已启用 <strong>{enabled}</strong></div>
+        <div><i className="index-dot paused" />已停用 <strong>{paused}</strong></div>
         <div><i className="index-dot attention" />需处理 <strong>{attention}</strong></div>
       </div>
 
@@ -354,14 +400,22 @@ function AppRail({
   );
 }
 
-function EmptyTasks({ onCreate, onManual }: { onCreate: () => void; onManual: () => void }) {
+function EmptyTasks({
+  capabilities,
+  onCreate,
+  onManual,
+}: {
+  capabilities: SchedulerCapabilities;
+  onCreate: () => void;
+  onManual: () => void;
+}) {
   return (
     <section className="empty-tasks">
       <div className="empty-illustration" aria-hidden="true">
         <img src={tickMascot} alt="" />
         <span>00:00</span>
       </div>
-      <h2>让 Mac 按时替你做事</h2>
+      <h2>让 {capabilities.computerLabel} 按时替你做事</h2>
       <p>描述一件需要重复完成的事情，或直接填写运行时间与脚本。保存前你仍然可以检查和试跑。</p>
       <div className="empty-actions">
         <Button type="primary" icon={<PlusOutlined />} onClick={onCreate}>
@@ -378,9 +432,9 @@ function ScheduleCalendar({
   loading,
   onOpenJob,
 }: {
-  jobs: LaunchdJob[];
+  jobs: ScheduledJob[];
   loading: boolean;
-  onOpenJob: (job: LaunchdJob) => void;
+  onOpenJob: (job: ScheduledJob) => void;
 }) {
   const [visibleMonth, setVisibleMonth] = useState(() => monthKey(new Date()));
   const todayKey = dateKey(new Date());
@@ -464,18 +518,20 @@ function ScheduleCalendar({
 
 function DetailPanel({
   job,
+  capabilities,
   busy,
   onToggle,
   onRun,
   onEdit,
   onDelete,
 }: {
-  job: LaunchdJob;
+  job: ScheduledJob;
+  capabilities: SchedulerCapabilities;
   busy: boolean;
-  onToggle: (job: LaunchdJob, enabled: boolean) => void;
-  onRun: (job: LaunchdJob) => void;
-  onEdit: (job: LaunchdJob) => void;
-  onDelete: (job: LaunchdJob) => void;
+  onToggle: (job: ScheduledJob, enabled: boolean) => void;
+  onRun: (job: ScheduledJob) => void;
+  onEdit: (job: ScheduledJob) => void;
+  onDelete: (job: ScheduledJob) => void;
 }) {
   const [activeTab, setActiveTab] = useState("overview");
 
@@ -516,7 +572,7 @@ function DetailPanel({
             aria-label={`${job.name}启用状态`}
             onChange={(checked) => onToggle(job, checked)}
           />
-          <span>{job.status === "enabled" ? "已加入日程" : "当前已暂停"}</span>
+          <span>{job.status === "enabled" ? "已加入日程" : "调度已停用"}</span>
         </label>
         <div>
           <Button type="primary" icon={<PlayCircleOutlined />} loading={busy} onClick={() => onRun(job)}>
@@ -527,7 +583,7 @@ function DetailPanel({
           </Button>
           <Popconfirm
             title="删除这个任务？"
-            description="对应的 LaunchAgent 配置也会一并移除。"
+            description={`对应的 ${capabilities.schedulerName} 配置也会一并移除。`}
             okText="删除"
             cancelText="取消"
             okButtonProps={{ danger: true }}
@@ -546,17 +602,17 @@ function DetailPanel({
           {
             key: "overview",
             label: "任务定义",
-            children: <OverviewPanel job={job} />,
+            children: <OverviewPanel job={job} capabilities={capabilities} />,
           },
           {
             key: "logs",
             label: "实时日志",
-            children: <LogsPanel job={job} />,
+            children: <LogsPanel job={job} homeDirectory={capabilities.homeDirectory} />,
           },
           {
-            key: "plist",
-            label: "plist",
-            children: <PlistPanel job={job} />,
+            key: "definition",
+            label: capabilities.definitionLabel,
+            children: <DefinitionPanel job={job} capabilities={capabilities} />,
           },
         ]}
       />
@@ -564,15 +620,30 @@ function DetailPanel({
   );
 }
 
-function OverviewPanel({ job }: { job: LaunchdJob }) {
+function OverviewPanel({ job, capabilities }: { job: ScheduledJob; capabilities: SchedulerCapabilities }) {
   return (
     <dl className="metadata-ledger">
       <MetadataRow label="运行计划" value={scheduleSummary(job.schedule)} />
       <MetadataRow label="执行命令" value={commandSummary(job.execution)} mono />
       <MetadataRow label="任务标识" value={job.label} mono copyable />
-      <MetadataRow label="plist 配置" value={displayPath(job.plistPath)} copyText={job.plistPath} mono />
-      <MetadataRow label="标准输出" value={displayPath(job.stdoutPath)} copyText={job.stdoutPath} mono />
-      <MetadataRow label="标准错误" value={displayPath(job.stderrPath)} copyText={job.stderrPath} mono />
+      <MetadataRow
+        label={capabilities.definitionLabel}
+        value={displayPath(job.definitionPath, capabilities.homeDirectory)}
+        copyText={job.definitionPath}
+        mono
+      />
+      <MetadataRow
+        label="标准输出"
+        value={displayPath(job.stdoutPath, capabilities.homeDirectory)}
+        copyText={job.stdoutPath}
+        mono
+      />
+      <MetadataRow
+        label="标准错误"
+        value={displayPath(job.stderrPath, capabilities.homeDirectory)}
+        copyText={job.stderrPath}
+        mono
+      />
       <MetadataRow label="配置更新" value={new Date(job.lastModifiedAt).toLocaleString("zh-CN")} />
     </dl>
   );
@@ -603,7 +674,7 @@ function MetadataRow({
   );
 }
 
-function jobsForDate(jobs: LaunchdJob[], date: Date) {
+function jobsForDate(jobs: ScheduledJob[], date: Date) {
   return jobs
     .filter((job) => job.schedule.mode === "calendar" && jobMatchesDate(job, date))
     .sort((a, b) => {
@@ -612,7 +683,7 @@ function jobsForDate(jobs: LaunchdJob[], date: Date) {
     });
 }
 
-function jobMatchesDate(job: LaunchdJob, date: Date) {
+function jobMatchesDate(job: ScheduledJob, date: Date) {
   if (job.status === "missing" || job.status === "error") return false;
 
   const { month, day } = job.schedule.calendar;
@@ -624,7 +695,7 @@ function jobMatchesDate(job: LaunchdJob, date: Date) {
   return true;
 }
 
-function runTimeLabel(job: LaunchdJob) {
+function runTimeLabel(job: ScheduledJob) {
   if (job.schedule.mode === "interval") {
     return formatInterval(job.schedule.interval.seconds);
   }
@@ -640,7 +711,7 @@ function formatInterval(seconds: number) {
   return `每 ${seconds} 秒`;
 }
 
-function runSortValue(job: LaunchdJob) {
+function runSortValue(job: ScheduledJob) {
   const { hour = 0, minute = 0, second = 0 } = job.schedule.calendar;
   return hour * 3600 + minute * 60 + second;
 }

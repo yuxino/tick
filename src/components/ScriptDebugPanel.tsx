@@ -1,6 +1,6 @@
 import { CheckCircleOutlined, CloseCircleOutlined, ClockCircleOutlined } from "@ant-design/icons";
 import { Typography } from "antd";
-import type { RunNodeScriptDebugResponse } from "../services/launchd";
+import type { RunNodeScriptDebugResponse } from "../services/scheduler";
 
 interface ScriptDebugPanelProps {
   result?: RunNodeScriptDebugResponse;

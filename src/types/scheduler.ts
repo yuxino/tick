@@ -18,13 +18,13 @@ interface IntervalSchedule {
   seconds: number;
 }
 
-export interface LaunchdSchedule {
+export interface JobSchedule {
   mode: ScheduleMode;
   calendar: CalendarSchedule;
   interval: IntervalSchedule;
 }
 
-export interface LaunchdExecution {
+export interface JobExecution {
   mode: ExecutionMode;
   inlineScript: string;
   scriptPath: string;
@@ -34,26 +34,40 @@ export interface LaunchdExecution {
   environment: Array<{ key: string; value: string }>;
 }
 
-export interface LaunchdJob {
+export interface ScheduledJob {
   id: string;
   label: string;
   name: string;
   description: string;
   status: JobStatus;
-  schedule: LaunchdSchedule;
-  execution: LaunchdExecution;
+  schedule: JobSchedule;
+  execution: JobExecution;
   stdoutPath: string;
   stderrPath: string;
-  plistPath: string;
+  definitionPath: string;
   lastModifiedAt: string;
 }
 
-export interface LaunchdJobInput {
+export interface ScheduledJobInput {
   id?: string;
   name: string;
   description: string;
-  schedule: LaunchdSchedule;
-  execution: LaunchdExecution;
+  schedule: JobSchedule;
+  execution: JobExecution;
+}
+
+export interface SchedulerCapabilities {
+  platform: string;
+  computerLabel: string;
+  schedulerName: string;
+  definitionLabel: string;
+  defaultInterpreter: string;
+  scriptPathExample: string;
+  workingDirectoryExample: string;
+  homeDirectory: string;
+  trashLabel: string;
+  minimumIntervalSeconds: number;
+  maximumIntervalSeconds?: number;
 }
 
 export interface JobLog {

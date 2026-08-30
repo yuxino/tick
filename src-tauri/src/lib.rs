@@ -1,5 +1,5 @@
 mod ai;
-mod launchd;
+mod scheduler;
 
 use tauri::{
     image::Image,
@@ -41,9 +41,10 @@ pub fn run() {
 
             TrayIconBuilder::new()
                 .icon(icon)
-                .icon_as_template(true)
+                .icon_as_template(cfg!(target_os = "macos"))
                 .tooltip("Tick")
                 .menu(&menu)
+                .show_menu_on_left_click(false)
                 .on_menu_event(|app, event| match event.id().as_ref() {
                     "show" => {
                         show_main_window(app);
@@ -91,15 +92,16 @@ pub fn run() {
             ai::test_deepseek_connection,
             ai::generate_automation,
             ai::run_node_script_debug,
-            launchd::commands::list_launchd_jobs,
-            launchd::commands::save_launchd_job,
-            launchd::commands::enable_launchd_job,
-            launchd::commands::disable_launchd_job,
-            launchd::commands::run_launchd_job_now,
-            launchd::commands::delete_launchd_job,
-            launchd::commands::read_launchd_log,
-            launchd::commands::clear_launchd_log,
-            launchd::commands::read_launchd_plist,
+            scheduler::commands::get_scheduler_capabilities,
+            scheduler::commands::list_scheduled_jobs,
+            scheduler::commands::save_scheduled_job,
+            scheduler::commands::enable_scheduled_job,
+            scheduler::commands::disable_scheduled_job,
+            scheduler::commands::run_scheduled_job_now,
+            scheduler::commands::delete_scheduled_job,
+            scheduler::commands::read_scheduled_job_log,
+            scheduler::commands::clear_scheduled_job_log,
+            scheduler::commands::read_job_definition,
         ])
         .build(tauri::generate_context!())
         .expect("构建 Tauri 应用时出错");
@@ -116,4 +118,12 @@ pub fn run() {
             }
         }
     });
+}
+
+pub fn run_scheduled_job_runner(id: &str) -> Result<i32, String> {
+    scheduler::commands::run_scheduled_job_runner(id)
+}
+
+pub fn record_scheduled_job_runner_error(id: &str, message: &str) {
+    let _ = scheduler::executor::append_runner_error_for_id(id, message);
 }
