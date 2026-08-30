@@ -277,7 +277,7 @@ function App() {
           <Alert
             type="warning"
             title="未检测到 Node.js"
-            description={`Tick 使用 Node.js 执行 JavaScript 任务。请自行安装 Node.js 后点击“重新检测”；Tick 不会自动安装。${nodeRuntime.reason ? ` 检测详情：${nodeRuntime.reason}` : ""}`}
+            description={`Tick 使用 Node.js 执行 JavaScript 任务。请自行安装 Node.js 后点击“重新检测”；Tick 不会自动安装或修改 PATH。若刚安装仍未识别，请完全退出 Tick 后重新打开。${nodeRuntime.reason ? ` 检测详情：${nodeRuntime.reason}` : ""}`}
             action={<Button size="small" loading={checkingNode} onClick={recheckNodeRuntime}>重新检测</Button>}
             showIcon
             className="top-alert"
@@ -353,7 +353,13 @@ function App() {
         }}
         onGenerated={openGeneratedAutomation}
       />
-      <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} />
+      <SettingsModal
+        open={settingsOpen}
+        nodeRuntime={nodeRuntime}
+        checkingNode={checkingNode}
+        onRecheckNode={recheckNodeRuntime}
+        onClose={() => setSettingsOpen(false)}
+      />
     </div>
   );
 }

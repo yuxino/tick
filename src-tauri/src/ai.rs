@@ -279,25 +279,29 @@ pub async fn run_node_script_debug(
         return Err("没有可运行的脚本内容".to_string());
     }
 
-    crate::scheduler::runtime::ensure_default_node_runtime().await?;
+    let node_command = crate::scheduler::runtime::default_node_command().await?;
+    let (node_program, node_arguments) = node_command
+        .split_first()
+        .ok_or_else(|| "Node.js 检测命令为空".to_string())?;
 
     let script_path = write_debug_script(script)?;
     let started_at = Instant::now();
-    #[cfg(target_os = "macos")]
-    let mut command = {
-        let mut command = TokioCommand::new("/usr/bin/env");
-        command.arg("node");
-        command
-    };
-    #[cfg(target_os = "windows")]
-    let mut command = TokioCommand::new("node.exe");
-    command.kill_on_drop(true).arg(&script_path);
+    let mut command = TokioCommand::new(node_program);
+    command
+        .args(node_arguments)
+        .kill_on_drop(true)
+        .arg(&script_path);
 
     #[cfg(target_os = "windows")]
-    command.env(
-        "TICK_EXECUTABLE",
-        std::env::current_exe().map_err(|err| format!("无法确定 Tick 程序路径：{err}"))?,
-    );
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+        command.as_std_mut().creation_flags(CREATE_NO_WINDOW);
+        command.env(
+            "TICK_EXECUTABLE",
+            std::env::current_exe().map_err(|err| format!("无法确定 Tick 程序路径：{err}"))?,
+        );
+    }
 
     if let Some(directory) = input.working_directory.as_deref().map(str::trim) {
         if !directory.is_empty() {

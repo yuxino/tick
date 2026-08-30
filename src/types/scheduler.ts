@@ -73,6 +73,7 @@ export interface SchedulerCapabilities {
 export interface NodeRuntimeStatus {
   available: boolean;
   version?: string;
+  executablePath?: string;
   reason?: string;
 }
 

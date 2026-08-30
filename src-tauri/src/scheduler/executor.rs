@@ -436,6 +436,13 @@ fn run_windows_job(job: &ScheduledJob, args: &[String]) -> Result<i32, String> {
         Ok(block)
     }
 
+    let mut resolved_args = args.to_vec();
+    if let Some(program) = resolved_args.first_mut() {
+        if let Some(path) = super::runtime::resolve_windows_node_program(program) {
+            *program = path.to_string_lossy().to_string();
+        }
+    }
+    let args = resolved_args.as_slice();
     let (program, _) = args.split_first().ok_or_else(|| "命令为空".to_string())?;
     let command_line = build_windows_command_line(args)?;
     let mut command_line = wide_null(OsStr::new(&command_line));

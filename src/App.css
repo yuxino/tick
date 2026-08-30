@@ -1217,9 +1217,19 @@ button:focus-visible,
   resize: vertical;
 }
 
+.settings-stack {
+  display: grid;
+  gap: 24px;
+}
+
 .settings-section {
   display: grid;
   gap: 18px;
+}
+
+.settings-section + .settings-section {
+  padding-top: 24px;
+  border-top: 1px solid var(--line);
 }
 
 .settings-heading {
@@ -1239,6 +1249,14 @@ button:focus-visible,
   border-left: 2px solid var(--line);
   background: var(--paper-soft);
   font-size: 11px;
+}
+
+.settings-runtime-path {
+  display: block;
+  width: fit-content;
+  max-width: 100%;
+  margin-top: 6px;
+  overflow-wrap: anywhere;
 }
 
 .settings-key-row {
