@@ -2,7 +2,7 @@
 
 ## 目标与边界
 
-修复 Windows 中输入“1分钟后提示我”后，DeepSeek 草稿因 JSON 形态与 Tick 的严格 Rust 模型不完全一致而直接失败的问题。Tick 仍只支持日历和固定间隔任务；相对时间会被转换为固定间隔，并明确提示它会重复运行。此次不新增一次性调度模式，也不把日志伪装成 Windows 系统通知。
+修复 Windows 中输入“1分钟后提示我”后，DeepSeek 草稿因 JSON 形态与 Tick 的严格 Rust 模型不完全一致而直接失败的问题。Tick 仍只支持日历和固定间隔任务；相对时间会被转换为固定间隔，并明确提示它会重复运行。此次不新增一次性调度模式；Windows 通知通过 Tick 自带的原生提示窗口实现，不把日志伪装成通知，也不依赖 PowerShell。
 
 ## 数据流与兼容策略
 
@@ -16,4 +16,4 @@ API Key 继续保存在当前用户的 `%APPDATA%\com.gavin.tick\settings.json`�
 
 ## 验证
 
-Rust 回归覆盖围栏/说明文字提取、截断诊断、缺字段与别名修复、“1分钟后”的 60 秒解析、重复运行风险提示、token 截断拒绝，以及已有设置文件的原子替换。完整 `npm run check` 覆盖格式、Clippy、Rust 测试、路径隐私和前端构建；Windows x64 CI 再运行同一门禁、生成 NSIS 安装包并检查 PE 架构与嵌入路径。原生安装、真实 DeepSeek Key 保存/替换/调用及界面点击由用户在 Windows 中手动复测。
+Rust 回归覆盖围栏/说明文字提取、截断诊断、缺字段与别名修复、“1分钟后”的 60 秒解析、重复运行风险提示、Windows 原生提示调用校验、token 截断拒绝，以及已有设置文件的原子替换。完整 `npm run check` 覆盖格式、Clippy、Rust 测试、路径隐私和前端构建；Windows x64 CI 再运行同一门禁、生成 NSIS 安装包并检查 PE 架构与嵌入路径。原生安装、真实 DeepSeek Key 保存/替换/调用及界面点击由用户在 Windows 中手动复测。

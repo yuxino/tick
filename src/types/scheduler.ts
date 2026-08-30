@@ -70,6 +70,12 @@ export interface SchedulerCapabilities {
   maximumIntervalSeconds?: number;
 }
 
+export interface NodeRuntimeStatus {
+  available: boolean;
+  version?: string;
+  reason?: string;
+}
+
 export interface JobLog {
   kind: LogKind;
   path: string;

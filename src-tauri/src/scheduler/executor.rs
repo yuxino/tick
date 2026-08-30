@@ -157,6 +157,10 @@ fn spawn_process(job: &ScheduledJob, args: Vec<String>) -> Result<Child, String>
     {
         command.env(item.key.trim(), &item.value);
     }
+    command.env(
+        "TICK_EXECUTABLE",
+        std::env::current_exe().map_err(|err| format!("无法确定 Tick 程序路径：{err}"))?,
+    );
 
     command.spawn().map_err(|err| {
         let message = format!("启动任务进程失败：{err}");
@@ -204,7 +208,7 @@ fn normalize_inline_script(job: &ScheduledJob) -> String {
     }
 }
 
-fn interpreter_parts(value: &str) -> Result<Vec<String>, String> {
+pub(crate) fn interpreter_parts(value: &str) -> Result<Vec<String>, String> {
     let value = value.trim();
     if value.is_empty() {
         #[cfg(target_os = "windows")]
@@ -386,7 +390,7 @@ fn run_windows_job(job: &ScheduledJob, args: &[String]) -> Result<i32, String> {
         Ok(OwnedWindowsHandle(duplicate))
     }
 
-    fn environment_block(job: &ScheduledJob) -> Vec<u16> {
+    fn environment_block(job: &ScheduledJob) -> Result<Vec<u16>, String> {
         let mut values = std::env::vars_os().collect::<Vec<(OsString, OsString)>>();
         for item in job
             .execution
@@ -403,6 +407,17 @@ fn run_windows_job(job: &ScheduledJob, args: &[String]) -> Result<i32, String> {
                 values.push((key, OsString::from(&item.value)));
             }
         }
+        let tick_key = OsString::from("TICK_EXECUTABLE");
+        let tick_value = std::env::current_exe()
+            .map_err(|err| format!("无法确定 Tick 程序路径：{err}"))?
+            .into_os_string();
+        if let Some(existing) = values.iter_mut().find(|(candidate, _)| {
+            compare_environment_keys(candidate.as_os_str(), tick_key.as_os_str()) == Ordering::Equal
+        }) {
+            *existing = (tick_key, tick_value);
+        } else {
+            values.push((tick_key, tick_value));
+        }
         values.sort_by(|left, right| {
             compare_environment_keys(left.0.as_os_str(), right.0.as_os_str())
         });
@@ -418,7 +433,7 @@ fn run_windows_job(job: &ScheduledJob, args: &[String]) -> Result<i32, String> {
         if block.len() == 1 {
             block.push(0);
         }
-        block
+        Ok(block)
     }
 
     let (program, _) = args.split_first().ok_or_else(|| "命令为空".to_string())?;
@@ -432,7 +447,7 @@ fn run_windows_job(job: &ScheduledJob, args: &[String]) -> Result<i32, String> {
             job.execution.working_directory.trim(),
         )))
     };
-    let environment = environment_block(job);
+    let environment = environment_block(job)?;
 
     let stdout_file = OpenOptions::new()
         .create(true)

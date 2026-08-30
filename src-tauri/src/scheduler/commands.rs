@@ -4,6 +4,7 @@ use super::models::{JobStatus, ScheduledJob, ScheduledJobInput, SchedulerCapabil
 use super::paths::{ensure_dirs, normalize_managed_paths, scheduler_capabilities, LABEL_PREFIX};
 use super::platform;
 use super::registry;
+use super::runtime::{self, NodeRuntimeStatus};
 use super::validation::validate_job_input;
 use chrono::Utc;
 use std::path::PathBuf;
@@ -11,6 +12,11 @@ use std::path::PathBuf;
 #[tauri::command]
 pub fn get_scheduler_capabilities() -> Result<SchedulerCapabilities, String> {
     scheduler_capabilities()
+}
+
+#[tauri::command]
+pub async fn get_node_runtime_status() -> NodeRuntimeStatus {
+    runtime::detect_default_node_runtime().await
 }
 
 #[tauri::command]
@@ -23,8 +29,9 @@ pub fn list_scheduled_jobs() -> Result<Vec<ScheduledJob>, String> {
 }
 
 #[tauri::command]
-pub fn save_scheduled_job(input: ScheduledJobInput) -> Result<ScheduledJob, String> {
+pub async fn save_scheduled_job(input: ScheduledJobInput) -> Result<ScheduledJob, String> {
     validate_job_input(&input)?;
+    runtime::ensure_node_runtime_for_execution(&input.execution).await?;
     ensure_dirs()?;
     let _operation_lock = registry::acquire_scheduler_operation_lock(true)?;
 
@@ -89,7 +96,9 @@ pub fn save_scheduled_job(input: ScheduledJobInput) -> Result<ScheduledJob, Stri
 }
 
 #[tauri::command]
-pub fn enable_scheduled_job(id: String) -> Result<ScheduledJob, String> {
+pub async fn enable_scheduled_job(id: String) -> Result<ScheduledJob, String> {
+    let execution = registry::find_job(&id)?.execution;
+    runtime::ensure_node_runtime_for_execution(&execution).await?;
     let _operation_lock = registry::acquire_scheduler_operation_lock(true)?;
     let job = registry::find_job(&id)?;
     let previous_status = platform::status(&job)?;
@@ -107,7 +116,9 @@ pub fn disable_scheduled_job(id: String) -> Result<ScheduledJob, String> {
 }
 
 #[tauri::command]
-pub fn run_scheduled_job_now(id: String) -> Result<(), String> {
+pub async fn run_scheduled_job_now(id: String) -> Result<(), String> {
+    let execution = registry::find_job(&id)?.execution;
+    runtime::ensure_node_runtime_for_execution(&execution).await?;
     let _operation_lock = registry::acquire_scheduler_operation_lock(true)?;
     let job = registry::find_job(&id)?;
     platform::run_now(&job)

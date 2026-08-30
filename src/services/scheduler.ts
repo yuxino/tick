@@ -2,6 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import type {
   JobLog,
   LogKind,
+  NodeRuntimeStatus,
   ScheduledJob,
   ScheduledJobInput,
   SchedulerCapabilities,
@@ -32,6 +33,10 @@ export function getSchedulerCapabilities() {
       ...capabilities,
       maximumIntervalSeconds: capabilities.maximumIntervalSeconds ?? undefined,
     }));
+}
+
+export function getNodeRuntimeStatus() {
+  return invoke<NodeRuntimeStatus>("get_node_runtime_status");
 }
 
 export function listScheduledJobs() {

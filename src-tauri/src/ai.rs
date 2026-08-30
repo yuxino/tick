@@ -279,6 +279,8 @@ pub async fn run_node_script_debug(
         return Err("没有可运行的脚本内容".to_string());
     }
 
+    crate::scheduler::runtime::ensure_default_node_runtime().await?;
+
     let script_path = write_debug_script(script)?;
     let started_at = Instant::now();
     #[cfg(target_os = "macos")]
@@ -290,6 +292,12 @@ pub async fn run_node_script_debug(
     #[cfg(target_os = "windows")]
     let mut command = TokioCommand::new("node.exe");
     command.kill_on_drop(true).arg(&script_path);
+
+    #[cfg(target_os = "windows")]
+    command.env(
+        "TICK_EXECUTABLE",
+        std::env::current_exe().map_err(|err| format!("无法确定 Tick 程序路径：{err}"))?,
+    );
 
     if let Some(directory) = input.working_directory.as_deref().map(str::trim) {
         if !directory.is_empty() {
@@ -539,7 +547,9 @@ fn automation_system_prompt() -> String {
         "- 调用 Windows 程序时只使用 node:child_process 的 execFile/execFileSync 和参数数组，禁止拼接 cmd、PowerShell 或其他 shell 命令。",
         "- console.log/console.error 只写入 Tick 的 stdout/stderr 日志，绝不能把它们当成用户通知。",
         "- 用户要求打开网页、文件或应用时，可用 explorer.exe 和参数数组。",
-        "- 用户要求通知、回收站删除或其他无法仅靠 Node.js 内置模块可靠完成的原生行为时，不要伪造实现；在 risks 中明确写出未实现部分。",
+        "- Tick 会在任务进程中提供 TICK_EXECUTABLE 环境变量，指向当前 Tick.exe。用户说“提醒我”“提示我”“通知我”“完成后告诉我”或“失败时通知”时，必须调用 Tick 自带的 Windows 原生提示窗口。",
+        r#"- Windows 提示的实现形态应类似：execFileSync(process.env.TICK_EXECUTABLE, ["--show-message", "喝水时间到了"], { windowsHide: true })。消息必须作为独立参数传入，不能拼接命令。"#,
+        "- 回收站删除或其他 Tick 未提供的原生行为不能伪造；在 risks 中明确写出未实现部分。",
         "- summary 中声称完成的每一项行为，都必须能在 inlineScript 中找到对应实现。",
         "- 文件路径使用用户给出的绝对路径；没给路径时不要猜私人目录，写入 risks 并使用安全的占位逻辑。",
         "- 不读取凭据管理器、SSH key、浏览器 cookie 或其他密钥。",
@@ -951,7 +961,32 @@ fn validate_native_capabilities(prompt: &str, script: &str) -> Result<(), String
 }
 
 #[cfg(target_os = "windows")]
-fn validate_native_capabilities(_prompt: &str, _script: &str) -> Result<(), String> {
+fn validate_native_capabilities(prompt: &str, script: &str) -> Result<(), String> {
+    validate_windows_native_capabilities(prompt, script)
+}
+
+#[cfg(any(target_os = "windows", test))]
+fn validate_windows_native_capabilities(prompt: &str, script: &str) -> Result<(), String> {
+    let asks_for_notification = [
+        "提醒我",
+        "提示我",
+        "通知我",
+        "发通知",
+        "系统通知",
+        "完成后告诉我",
+        "失败时通知",
+    ]
+    .iter()
+    .any(|keyword| prompt.contains(keyword));
+    let implements_notification = script.contains("process.env.TICK_EXECUTABLE")
+        && script.contains("--show-message")
+        && (script.contains("execFile(") || script.contains("execFileSync("));
+
+    if asks_for_notification && !implements_notification {
+        return Err(
+            "AI 没有调用 Tick 自带的 Windows 原生提示窗口；正在要求 DeepSeek 修复脚本".to_string(),
+        );
+    }
     Ok(())
 }
 
@@ -970,7 +1005,7 @@ mod tests {
     use super::validate_native_capabilities;
     use super::{
         mask_api_key, parse_automation_completion, parse_json_document, replace_settings_file,
-        validate_api_key, AutomationCompletion,
+        validate_api_key, validate_windows_native_capabilities, AutomationCompletion,
     };
     use crate::scheduler::models::{ExecutionMode, ScheduleMode};
     use std::time::{SystemTime, UNIX_EPOCH};
@@ -1020,7 +1055,7 @@ mod tests {
                     },
                     "execution": {
                       "mode": "javascript",
-                      "script": "console.log('时间到了')"
+                      "script": "const { execFileSync } = require('node:child_process'); execFileSync(process.env.TICK_EXECUTABLE, ['--show-message', '时间到了'], { windowsHide: true });"
                     }
                   },
                   "summary": "一分钟后执行提示脚本",
@@ -1036,7 +1071,7 @@ mod tests {
         assert_eq!(draft.job.schedule.mode, ScheduleMode::Interval);
         assert_eq!(draft.job.schedule.interval.seconds, 60);
         assert_eq!(draft.job.execution.mode, ExecutionMode::InlineShell);
-        assert_eq!(draft.job.execution.inline_script, "console.log('时间到了')");
+        assert!(draft.job.execution.inline_script.contains("--show-message"));
         assert!(draft.risks.iter().any(|risk| risk.contains("重复运行")));
     }
 
@@ -1081,6 +1116,19 @@ mod tests {
         assert!(validate_native_capabilities(
             "每天提醒我喝水",
             r#"execFileSync("/usr/bin/osascript", ["-e", "display notification \"喝水\""])"#
+        )
+        .is_ok());
+    }
+
+    #[test]
+    fn windows_notification_requires_the_tick_native_message_command() {
+        assert!(
+            validate_windows_native_capabilities("1分钟后提示我", "console.log('时间到了')")
+                .is_err()
+        );
+        assert!(validate_windows_native_capabilities(
+            "1分钟后提示我",
+            r#"execFileSync(process.env.TICK_EXECUTABLE, ["--show-message", "时间到了"], { windowsHide: true })"#,
         )
         .is_ok());
     }

@@ -10,6 +10,7 @@ pub mod paths;
 #[cfg(target_os = "macos")]
 pub mod plist_writer;
 pub mod registry;
+pub mod runtime;
 #[cfg(target_os = "windows")]
 pub(crate) mod task_scheduler;
 #[cfg(any(target_os = "windows", test))]

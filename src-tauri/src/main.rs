@@ -3,23 +3,35 @@
 
 fn main() {
     let mut arguments = std::env::args().skip(1);
-    if arguments.next().as_deref() == Some("--run-scheduled-job") {
-        let id = arguments.next();
-        let result = id
-            .as_deref()
-            .filter(|_| arguments.next().is_none())
-            .ok_or_else(|| "计划任务 runner 需要且只接受一个任务标识".to_string())
-            .and_then(tick_lib::run_scheduled_job_runner);
-        let exit_code = match result {
-            Ok(code) => code,
-            Err(err) => {
-                if let Some(id) = id.as_deref() {
-                    tick_lib::record_scheduled_job_runner_error(id, &err);
+    match arguments.next().as_deref() {
+        Some("--run-scheduled-job") => {
+            let id = arguments.next();
+            let result = id
+                .as_deref()
+                .filter(|_| arguments.next().is_none())
+                .ok_or_else(|| "计划任务 runner 需要且只接受一个任务标识".to_string())
+                .and_then(tick_lib::run_scheduled_job_runner);
+            let exit_code = match result {
+                Ok(code) => code,
+                Err(err) => {
+                    if let Some(id) = id.as_deref() {
+                        tick_lib::record_scheduled_job_runner_error(id, &err);
+                    }
+                    1
                 }
-                1
-            }
-        };
-        std::process::exit(exit_code);
+            };
+            std::process::exit(exit_code);
+        }
+        #[cfg(target_os = "windows")]
+        Some("--show-message") => {
+            let message = arguments.next();
+            let result = message
+                .as_deref()
+                .filter(|_| arguments.next().is_none())
+                .ok_or_else(|| "Windows 提示需要且只接受一段消息".to_string())
+                .and_then(tick_lib::show_windows_message);
+            std::process::exit(if result.is_ok() { 0 } else { 1 });
+        }
+        _ => tick_lib::run(),
     }
-    tick_lib::run()
 }

@@ -24,13 +24,14 @@ import {
   deleteScheduledJob,
   disableScheduledJob,
   enableScheduledJob,
+  getNodeRuntimeStatus,
   getSchedulerCapabilities,
   listScheduledJobs,
   runScheduledJobNow,
   saveScheduledJob,
 } from "./services/scheduler";
 import type { AutomationDraft } from "./services/scheduler";
-import type { ScheduledJob, ScheduledJobInput, SchedulerCapabilities } from "./types/scheduler";
+import type { NodeRuntimeStatus, ScheduledJob, ScheduledJobInput, SchedulerCapabilities } from "./types/scheduler";
 import { friendlyError } from "./utils/errors";
 import {
   commandSummary,
@@ -48,6 +49,8 @@ function App() {
   const [jobs, setJobs] = useState<ScheduledJob[]>([]);
   const [capabilities, setCapabilities] = useState<SchedulerCapabilities>(fallbackSchedulerCapabilities);
   const [capabilitiesReady, setCapabilitiesReady] = useState(false);
+  const [nodeRuntime, setNodeRuntime] = useState<NodeRuntimeStatus>();
+  const [checkingNode, setCheckingNode] = useState(false);
   const [selectedId, setSelectedId] = useState<string>();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -71,9 +74,10 @@ function App() {
   const loadJobs = useCallback(async () => {
     setLoading(true);
     setError(undefined);
-    const [capabilitiesResult, jobsResult] = await Promise.allSettled([
+    const [capabilitiesResult, jobsResult, nodeResult] = await Promise.allSettled([
       getSchedulerCapabilities(),
       listScheduledJobs(),
+      getNodeRuntimeStatus(),
     ]);
     const errors: string[] = [];
 
@@ -96,9 +100,26 @@ function App() {
       errors.push(`无法读取任务列表：${friendlyError(jobsResult.reason)}`);
     }
 
+    if (nodeResult.status === "fulfilled") {
+      setNodeRuntime(nodeResult.value);
+    } else {
+      setNodeRuntime({ available: false, reason: friendlyError(nodeResult.reason) });
+    }
+
     setError(errors.length > 0 ? errors.join("；") : undefined);
     setLoading(false);
   }, []);
+
+  async function recheckNodeRuntime() {
+    setCheckingNode(true);
+    try {
+      setNodeRuntime(await getNodeRuntimeStatus());
+    } catch (err) {
+      setNodeRuntime({ available: false, reason: friendlyError(err) });
+    } finally {
+      setCheckingNode(false);
+    }
+  }
 
   useEffect(() => {
     loadJobs();
@@ -251,6 +272,17 @@ function App() {
         </header>
 
         {error && <Alert type="error" title={error} showIcon closable className="top-alert" onClose={() => setError(undefined)} />}
+
+        {nodeRuntime && !nodeRuntime.available ? (
+          <Alert
+            type="warning"
+            title="未检测到 Node.js"
+            description={`Tick 使用 Node.js 执行 JavaScript 任务。请自行安装 Node.js 后点击“重新检测”；Tick 不会自动安装。${nodeRuntime.reason ? ` 检测详情：${nodeRuntime.reason}` : ""}`}
+            action={<Button size="small" loading={checkingNode} onClick={recheckNodeRuntime}>重新检测</Button>}
+            showIcon
+            className="top-alert"
+          />
+        ) : null}
 
         <div className="page-stage">
           {activeView === "schedule" ? (

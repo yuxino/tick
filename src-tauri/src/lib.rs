@@ -93,6 +93,7 @@ pub fn run() {
             ai::generate_automation,
             ai::run_node_script_debug,
             scheduler::commands::get_scheduler_capabilities,
+            scheduler::commands::get_node_runtime_status,
             scheduler::commands::list_scheduled_jobs,
             scheduler::commands::save_scheduled_job,
             scheduler::commands::enable_scheduled_job,
@@ -126,4 +127,45 @@ pub fn run_scheduled_job_runner(id: &str) -> Result<i32, String> {
 
 pub fn record_scheduled_job_runner_error(id: &str, message: &str) {
     let _ = scheduler::executor::append_runner_error_for_id(id, message);
+}
+
+#[cfg(target_os = "windows")]
+pub fn show_windows_message(message: &str) -> Result<(), String> {
+    use std::os::windows::ffi::OsStrExt;
+    use windows::core::PCWSTR;
+    use windows::Win32::UI::WindowsAndMessaging::{
+        MessageBoxW, MB_ICONINFORMATION, MB_OK, MB_SETFOREGROUND,
+    };
+
+    let message = message.trim();
+    if message.is_empty() {
+        return Err("Windows 提示内容不能为空".to_string());
+    }
+    if message.chars().count() > 512 {
+        return Err("Windows 提示内容不能超过 512 个字符".to_string());
+    }
+    let message = std::ffi::OsStr::new(message)
+        .encode_wide()
+        .chain(std::iter::once(0))
+        .collect::<Vec<_>>();
+    let title = std::ffi::OsStr::new("Tick")
+        .encode_wide()
+        .chain(std::iter::once(0))
+        .collect::<Vec<_>>();
+    let result = unsafe {
+        MessageBoxW(
+            None,
+            PCWSTR(message.as_ptr()),
+            PCWSTR(title.as_ptr()),
+            MB_OK | MB_ICONINFORMATION | MB_SETFOREGROUND,
+        )
+    };
+    if result.0 == 0 {
+        Err(format!(
+            "无法显示 Windows 提示：{}",
+            windows::core::Error::from_win32()
+        ))
+    } else {
+        Ok(())
+    }
 }
