@@ -219,13 +219,14 @@ unsafe fn ensure_owned(task: &IRegisteredTask, id: &str, identity: &str) -> Resu
     unsafe { action.WorkingDirectory(&mut working_directory) }
         .map_err(|err| format_windows_error("无法读取 Windows 任务工作目录", err))?;
 
-    let is_owned = source.to_string() == TASK_SOURCE
-        && uri.to_string() == expected_uri
+    let expected_arguments = format!("--run-scheduled-job {id}");
+    let is_owned = source == TASK_SOURCE
+        && uri == expected_uri
         && user_id.to_string().eq_ignore_ascii_case(identity)
         && logon_type == TASK_LOGON_INTERACTIVE_TOKEN
         && run_level == TASK_RUNLEVEL_LUA
         && path.to_string().eq_ignore_ascii_case(expected_executable)
-        && arguments.to_string() == format!("--run-scheduled-job {id}")
+        && arguments == expected_arguments
         && working_directory
             .to_string()
             .eq_ignore_ascii_case(expected_working_directory);

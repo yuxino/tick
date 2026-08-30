@@ -92,7 +92,7 @@ pub fn run_and_wait(job: &ScheduledJob) -> Result<i32, String> {
 
     #[cfg(target_os = "windows")]
     {
-        return run_windows_job(job, &args);
+        run_windows_job(job, &args)
     }
 
     #[cfg(target_os = "macos")]
@@ -468,7 +468,7 @@ fn run_windows_job(job: &ScheduledJob, args: &[String]) -> Result<i32, String> {
         owned
     };
 
-    let mut startup = STARTUPINFOW {
+    let startup = STARTUPINFOW {
         cb: std::mem::size_of::<STARTUPINFOW>() as u32,
         dwFlags: STARTF_USESTDHANDLES,
         hStdInput: stdin.0,
@@ -494,7 +494,7 @@ fn run_windows_job(job: &ScheduledJob, args: &[String]) -> Result<i32, String> {
             creation_flags,
             Some(environment.as_ptr().cast()),
             current_directory,
-            &mut startup,
+            &startup,
             &mut process_information,
         )
     }
