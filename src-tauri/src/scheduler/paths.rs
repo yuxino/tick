@@ -100,8 +100,7 @@ pub fn task_name(id: &str) -> Result<String, String> {
 
 #[cfg(any(target_os = "windows", test))]
 pub fn task_uri(id: &str) -> Result<String, String> {
-    validate_job_id(id)?;
-    Ok(format!("tick://{TASK_SOURCE}/{id}"))
+    Ok(format!(r"\{}", task_name(id)?))
 }
 
 pub fn ensure_dirs() -> Result<(), String> {
@@ -248,6 +247,7 @@ mod tests {
         }
         assert!(validate_job_id("job-123456789012345678901").is_err());
         assert_eq!(task_name("job-123").unwrap(), "Tick.job-123");
+        assert_eq!(task_uri("job-123").unwrap(), r"\Tick.job-123");
     }
 
     #[test]
