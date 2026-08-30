@@ -21,8 +21,10 @@ pub fn build_task_xml(
         "false"
     };
 
+    // RegisterTask receives XmlText as a UTF-16 BSTR. Declaring UTF-8 here makes
+    // the Windows XML parser try to switch encodings and reject the document.
     Ok(format!(
-        r#"<?xml version="1.0" encoding="UTF-8"?>
+        r#"<?xml version="1.0"?>
 <Task version="1.4" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
   <RegistrationInfo>
     <Author>Tick</Author>
@@ -299,6 +301,61 @@ mod tests {
         assert!(value.contains("安全 &amp; &lt;测试&gt; &quot;引号&quot; &apos;ok&apos;"));
         assert!(has_tick_ownership(&value, "job-1234567890").unwrap());
         assert!(!has_tick_ownership(&value, "job-999").unwrap());
+    }
+
+    #[test]
+    fn omits_an_encoding_declaration_for_windows_bstr_registration() {
+        let value = build_task_xml(
+            &job(ScheduleMode::Calendar),
+            &PathBuf::from(r"C:\Program Files\Tick\tick.exe"),
+            "2026-08-30T09:30:17",
+        )
+        .unwrap();
+
+        assert!(value.starts_with("<?xml version=\"1.0\"?>\n<Task"));
+        assert!(!value.lines().next().unwrap().contains("encoding"));
+    }
+
+    #[cfg(target_os = "windows")]
+    #[test]
+    fn windows_task_scheduler_accepts_the_generated_bstr_xml() {
+        use windows::core::BSTR;
+        use windows::Win32::System::Com::{
+            CoCreateInstance, CoInitializeEx, CoUninitialize, CLSCTX_INPROC_SERVER,
+            COINIT_APARTMENTTHREADED,
+        };
+        use windows::Win32::System::TaskScheduler::{ITaskService, TaskScheduler};
+        use windows::Win32::System::Variant::VARIANT;
+
+        struct ComGuard;
+
+        impl Drop for ComGuard {
+            fn drop(&mut self) {
+                unsafe { CoUninitialize() };
+            }
+        }
+
+        let xml = build_task_xml(
+            &job(ScheduleMode::Interval),
+            &PathBuf::from(r"C:\Program Files\Tick\tick.exe"),
+            "2026-08-30T09:30:17",
+        )
+        .unwrap();
+
+        let validation = std::thread::spawn(move || unsafe {
+            CoInitializeEx(None, COINIT_APARTMENTTHREADED).ok()?;
+            let _guard = ComGuard;
+            let service: ITaskService =
+                CoCreateInstance(&TaskScheduler, None, CLSCTX_INPROC_SERVER)?;
+            let empty = VARIANT::default();
+            service.Connect(&empty, &empty, &empty, &empty)?;
+            let definition = service.NewTask(0)?;
+            definition.SetXmlText(&BSTR::from(xml.as_str()))
+        })
+        .join()
+        .expect("Windows Task Scheduler validation thread panicked");
+
+        validation.expect("Windows Task Scheduler rejected Tick's generated XML");
     }
 
     #[test]
