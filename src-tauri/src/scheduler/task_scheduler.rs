@@ -3,9 +3,12 @@ use super::paths::{task_name, task_uri, TASK_SOURCE};
 use super::task_xml::build_task_xml;
 use chrono::{Duration, Local};
 use windows::core::{Error as WindowsError, Interface, BSTR, PCWSTR, PWSTR};
-use windows::Win32::Foundation::{LocalFree, HLOCAL};
+use windows::Win32::Foundation::{CloseHandle, LocalFree, HANDLE, HLOCAL};
 use windows::Win32::Security::Authorization::ConvertStringSidToSidW;
-use windows::Win32::Security::{EqualSid, LookupAccountNameW, PSID, SID_NAME_USE};
+use windows::Win32::Security::{
+    EqualSid, GetTokenInformation, LookupAccountNameW, TokenUser, PSID, SID_NAME_USE, TOKEN_QUERY,
+    TOKEN_USER,
+};
 use windows::Win32::System::Com::{
     CoCreateInstance, CoInitializeEx, CoUninitialize, CLSCTX_INPROC_SERVER,
     COINIT_APARTMENTTHREADED,
@@ -14,6 +17,7 @@ use windows::Win32::System::TaskScheduler::{
     IExecAction, IRegisteredTask, ITaskFolder, ITaskService, TaskScheduler, TASK_ACTION_EXEC,
     TASK_CREATE, TASK_LOGON_INTERACTIVE_TOKEN, TASK_RUNLEVEL_LUA, TASK_STATE_DISABLED, TASK_UPDATE,
 };
+use windows::Win32::System::Threading::{GetCurrentProcess, OpenProcessToken};
 use windows::Win32::System::Variant::VARIANT;
 
 const HRESULT_FILE_NOT_FOUND: i32 = 0x8007_0002_u32 as i32;
@@ -29,7 +33,7 @@ pub fn save(job: &ScheduledJob) -> Result<(), String> {
         let name = task_name(&id)?;
         let flags = match root.GetTask(&BSTR::from(name.as_str())) {
             Ok(task) => {
-                ensure_owned(&task, &id, &identity)?;
+                ensure_owned(&task, &id)?;
                 TASK_UPDATE.0
             }
             Err(err) if is_task_missing(&err) => TASK_CREATE.0,
@@ -53,8 +57,8 @@ pub fn save(job: &ScheduledJob) -> Result<(), String> {
 
 pub fn enable(job: &ScheduledJob) -> Result<(), String> {
     let id = job.id.clone();
-    with_root(move |root, identity| unsafe {
-        let task = get_owned_task(&root, &id, &identity)?;
+    with_root(move |root, _| unsafe {
+        let task = get_owned_task(&root, &id)?;
         task.SetEnabled(true.into())
             .map_err(|err| format_windows_error("启用 Windows 任务失败", err))
     })
@@ -62,16 +66,16 @@ pub fn enable(job: &ScheduledJob) -> Result<(), String> {
 
 pub fn disable(job: &ScheduledJob) -> Result<(), String> {
     let id = job.id.clone();
-    with_root(move |root, identity| unsafe {
-        let task = get_owned_task(&root, &id, &identity)?;
+    with_root(move |root, _| unsafe {
+        let task = get_owned_task(&root, &id)?;
         disable_and_stop(&task)
     })
 }
 
 pub fn run_now(job: &ScheduledJob) -> Result<(), String> {
     let id = job.id.clone();
-    with_root(move |root, identity| unsafe {
-        let task = get_owned_task(&root, &id, &identity)?;
+    with_root(move |root, _| unsafe {
+        let task = get_owned_task(&root, &id)?;
         let was_enabled = task
             .Enabled()
             .map_err(|err| format_windows_error("读取 Windows 任务状态失败", err))?
@@ -101,14 +105,14 @@ pub fn run_now(job: &ScheduledJob) -> Result<(), String> {
 
 pub fn delete(job: &ScheduledJob) -> Result<(), String> {
     let id = job.id.clone();
-    with_root(move |root, identity| unsafe {
+    with_root(move |root, _| unsafe {
         let name = task_name(&id)?;
         let task = match root.GetTask(&BSTR::from(name.as_str())) {
             Ok(task) => task,
             Err(err) if is_task_missing(&err) => return Ok(()),
             Err(err) => return Err(format_windows_error("查询 Windows 任务失败", err)),
         };
-        ensure_owned(&task, &id, &identity)?;
+        ensure_owned(&task, &id)?;
         disable_and_stop(&task)?;
         root.DeleteTask(&BSTR::from(name.as_str()), 0)
             .map_err(|err| format_windows_error("删除 Windows 任务失败", err))
@@ -117,14 +121,14 @@ pub fn delete(job: &ScheduledJob) -> Result<(), String> {
 
 pub fn status(job: &ScheduledJob) -> Result<JobStatus, String> {
     let id = job.id.clone();
-    with_root(move |root, identity| unsafe {
+    with_root(move |root, _| unsafe {
         let name = task_name(&id)?;
         let task = match root.GetTask(&BSTR::from(name.as_str())) {
             Ok(task) => task,
             Err(err) if is_task_missing(&err) => return Ok(JobStatus::Missing),
             Err(err) => return Err(format_windows_error("查询 Windows 任务失败", err)),
         };
-        ensure_owned(&task, &id, &identity)?;
+        ensure_owned(&task, &id)?;
         let enabled = task
             .Enabled()
             .map_err(|err| format_windows_error("读取 Windows 任务状态失败", err))?
@@ -139,27 +143,23 @@ pub fn status(job: &ScheduledJob) -> Result<JobStatus, String> {
 
 pub fn read_definition(job: &ScheduledJob) -> Result<String, String> {
     let id = job.id.clone();
-    with_root(move |root, identity| unsafe {
-        let task = get_owned_task(&root, &id, &identity)?;
+    with_root(move |root, _| unsafe {
+        let task = get_owned_task(&root, &id)?;
         task.Xml()
             .map(|value| value.to_string())
             .map_err(|err| format_windows_error("读取 Windows 任务定义失败", err))
     })
 }
 
-unsafe fn get_owned_task(
-    root: &ITaskFolder,
-    id: &str,
-    identity: &str,
-) -> Result<IRegisteredTask, String> {
+unsafe fn get_owned_task(root: &ITaskFolder, id: &str) -> Result<IRegisteredTask, String> {
     let name = task_name(id)?;
     let task = unsafe { root.GetTask(&BSTR::from(name.as_str())) }
         .map_err(|err| format_windows_error("找不到 Windows 任务", err))?;
-    unsafe { ensure_owned(&task, id, identity)? };
+    unsafe { ensure_owned(&task, id)? };
     Ok(task)
 }
 
-unsafe fn ensure_owned(task: &IRegisteredTask, id: &str, identity: &str) -> Result<(), String> {
+unsafe fn ensure_owned(task: &IRegisteredTask, id: &str) -> Result<(), String> {
     let executable =
         std::env::current_exe().map_err(|err| format!("无法定位 Tick 可执行文件：{err}"))?;
     let expected_executable = executable
@@ -222,7 +222,7 @@ unsafe fn ensure_owned(task: &IRegisteredTask, id: &str, identity: &str) -> Resu
     unsafe { action.WorkingDirectory(&mut working_directory) }
         .map_err(|err| format_windows_error("无法读取 Windows 任务工作目录", err))?;
 
-    let principal_matches = principal_matches(identity, &user_id.to_string())?;
+    let principal_matches = principal_matches(&user_id.to_string())?;
     let uri_matches = ownership_uri_matches(&uri.to_string(), id)?;
     let expected_arguments = format!("--run-scheduled-job {id}");
     let source_matches = source == TASK_SOURCE;
@@ -259,25 +259,61 @@ unsafe fn ensure_owned(task: &IRegisteredTask, id: &str, identity: &str) -> Resu
     ))
 }
 
-fn principal_matches(expected_identity: &str, registered_identity: &str) -> Result<bool, String> {
-    let expected_identity = expected_identity.trim();
+fn principal_matches(registered_identity: &str) -> Result<bool, String> {
     let registered_identity = registered_identity.trim();
-    if expected_identity.is_empty() {
-        return Err("无法验证当前 Windows 账户：账户标识为空".to_string());
-    }
     if registered_identity.is_empty() {
         return Ok(false);
     }
-    if expected_identity.eq_ignore_ascii_case(registered_identity) {
-        return Ok(true);
-    }
-    let expected = resolve_account_sid(expected_identity)
-        .map_err(|err| format!("无法验证当前 Windows 账户：{err}"))?;
+    let expected =
+        current_process_user_sid().map_err(|err| format!("无法验证当前 Windows 账户：{err}"))?;
     let registered = match resolve_account_sid(registered_identity) {
         Ok(sid) => sid,
         Err(_) => return Ok(false),
     };
     Ok(unsafe { EqualSid(expected.as_psid(), registered.as_psid()).is_ok() })
+}
+
+fn current_process_user_sid() -> Result<ResolvedSid, String> {
+    let mut token = HANDLE::default();
+    unsafe { OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &mut token) }
+        .map_err(|err| format_windows_error("打开当前 Windows 进程令牌失败", err))?;
+    let _token = OwnedHandle(token);
+
+    let mut token_bytes = 0;
+    let probe = unsafe { GetTokenInformation(token, TokenUser, None, 0, &mut token_bytes) };
+    match probe {
+        Err(err) if err.code().0 == HRESULT_INSUFFICIENT_BUFFER => {}
+        Err(err) => return Err(format_windows_error("查询当前 Windows 用户 SID 失败", err)),
+        Ok(()) => return Err("Windows 进程令牌未返回用户 SID 缓冲区大小".to_string()),
+    }
+    if token_bytes == 0 {
+        return Err("Windows 进程令牌的用户 SID 为空".to_string());
+    }
+
+    let word_size = std::mem::size_of::<usize>() as u32;
+    let mut buffer = vec![0usize; token_bytes.div_ceil(word_size) as usize];
+    unsafe {
+        GetTokenInformation(
+            token,
+            TokenUser,
+            Some(buffer.as_mut_ptr().cast()),
+            token_bytes,
+            &mut token_bytes,
+        )
+    }
+    .map_err(|err| format_windows_error("读取当前 Windows 用户 SID 失败", err))?;
+    if token_bytes < std::mem::size_of::<TOKEN_USER>() as u32 {
+        return Err("Windows 进程令牌返回的用户 SID 数据不完整".to_string());
+    }
+    let token_user = unsafe { &*buffer.as_ptr().cast::<TOKEN_USER>() };
+    let sid = token_user.User.Sid;
+    if sid.is_invalid() {
+        return Err("Windows 进程令牌返回了无效用户 SID".to_string());
+    }
+    Ok(ResolvedSid::Account {
+        _buffer: buffer,
+        sid,
+    })
 }
 
 fn ownership_uri_matches(registered_uri: &str, id: &str) -> Result<bool, String> {
@@ -289,6 +325,16 @@ fn ownership_uri_matches(registered_uri: &str, id: &str) -> Result<bool, String>
 enum ResolvedSid {
     Local(PSID),
     Account { _buffer: Vec<usize>, sid: PSID },
+}
+
+struct OwnedHandle(HANDLE);
+
+impl Drop for OwnedHandle {
+    fn drop(&mut self) {
+        unsafe {
+            let _ = CloseHandle(self.0);
+        }
+    }
 }
 
 impl ResolvedSid {
@@ -596,6 +642,27 @@ mod tests {
         let _cleanup = RegisteredTaskCleanup { id: job.id.clone() };
         assert_eq!(status(&job).unwrap(), JobStatus::Disabled);
 
+        let id = job.id.clone();
+        let registered_principal = with_root(move |root, _| unsafe {
+            let task = root
+                .GetTask(&BSTR::from(task_name(&id)?.as_str()))
+                .map_err(|err| format_windows_error("读取 Windows 所有权测试任务失败", err))?;
+            let definition = task
+                .Definition()
+                .map_err(|err| format_windows_error("读取 Windows 所有权测试定义失败", err))?;
+            let principal = definition
+                .Principal()
+                .map_err(|err| format_windows_error("读取 Windows 所有权测试账户失败", err))?;
+            let mut user_id = BSTR::new();
+            principal
+                .UserId(&mut user_id)
+                .map_err(|err| format_windows_error("读取 Windows 所有权测试账户 SID 失败", err))?;
+            Ok(user_id.to_string())
+        })
+        .unwrap();
+        assert!(registered_principal.starts_with("S-"));
+        assert!(principal_matches(&registered_principal).unwrap());
+
         enable(&job).expect("failed to enable owned Windows task");
         assert_eq!(status(&job).unwrap(), JobStatus::Enabled);
         disable(&job).expect("failed to disable owned Windows task");
@@ -615,10 +682,10 @@ mod tests {
         assert!(ownership_uri_matches("tick://com.gavin.tick/job-1234567890", id).unwrap());
         assert!(!ownership_uri_matches(r"\Other.job-1234567890", id).unwrap());
 
-        assert!(principal_matches("S-1-5-18", "s-1-5-18").unwrap());
-        assert!(!principal_matches("S-1-5-18", "S-1-5-19").unwrap());
-        assert!(!principal_matches("S-1-5-18", "not-a-valid-account").unwrap());
-        assert!(principal_matches("", "").is_err());
-        assert!(!principal_matches("S-1-5-18", "").unwrap());
+        let connected_identity = with_root(|_, identity| Ok(identity)).unwrap();
+        assert!(principal_matches(&connected_identity).unwrap());
+        assert!(!principal_matches("S-1-0-0").unwrap());
+        assert!(!principal_matches("not-a-valid-account").unwrap());
+        assert!(!principal_matches("").unwrap());
     }
 }
