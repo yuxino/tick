@@ -11,7 +11,7 @@
 
 ## 本地开发
 
-以下流程已在 Apple 芯片（M 系列、arm64）Mac 上使用。Windows 需要 Microsoft C++ Build Tools 和 WebView2；Windows 11 ARM64 的原生验收仍在进行，Intel Mac 尚未验证。
+以下流程已在 Apple 芯片（M 系列、arm64）Mac 上使用。Windows 需要 Microsoft C++ Build Tools 和 WebView2；v0.1.1 的 Windows x64 发布资产已在 Windows 11 ARM64 的 x64 兼容环境完成核心验收，Windows ARM64 安装包由 CI 构建并校验架构。Intel Mac 尚未验证。
 
 ```bash
 npm install
