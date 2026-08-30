@@ -1,9 +1,10 @@
 use crate::scheduler::models::ScheduledJobInput;
 use crate::scheduler::validation::validate_job_input;
 use serde::{Deserialize, Serialize};
+use serde_json::{Map, Value};
 use std::fs::OpenOptions;
 use std::io::Write;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
 use tokio::process::Command as TokioCommand;
 use tokio::time::{timeout, Duration};
@@ -105,6 +106,7 @@ pub async fn test_deepseek_connection() -> Result<(), String> {
         model: DEEPSEEK_MODEL.to_string(),
         temperature: 0.0,
         max_tokens: 1,
+        response_format: None,
         messages: vec![DeepSeekMessage {
             role: "user".to_string(),
             content: "Reply OK.".to_string(),
@@ -121,6 +123,14 @@ struct DeepSeekRequest {
     messages: Vec<DeepSeekMessage>,
     temperature: f32,
     max_tokens: u32,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    response_format: Option<DeepSeekResponseFormat>,
+}
+
+#[derive(Debug, Serialize)]
+struct DeepSeekResponseFormat {
+    #[serde(rename = "type")]
+    kind: &'static str,
 }
 
 #[derive(Debug, Serialize)]
@@ -137,11 +147,13 @@ struct DeepSeekResponse {
 #[derive(Debug, Deserialize)]
 struct DeepSeekChoice {
     message: DeepSeekResponseMessage,
+    #[serde(default)]
+    finish_reason: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
 struct DeepSeekResponseMessage {
-    content: String,
+    content: Option<String>,
 }
 
 #[tauri::command]
@@ -154,34 +166,105 @@ pub async fn generate_automation(
     }
 
     let api_key = deepseek_api_key()?;
+    let system_prompt = automation_system_prompt();
+    let user_prompt = automation_user_prompt(prompt);
+    let first_messages = vec![
+        DeepSeekMessage {
+            role: "system".to_string(),
+            content: system_prompt.clone(),
+        },
+        DeepSeekMessage {
+            role: "user".to_string(),
+            content: user_prompt.clone(),
+        },
+    ];
+    let first_completion = request_automation_completion(&api_key, first_messages).await?;
+
+    match parse_automation_completion(prompt, &first_completion) {
+        Ok(draft) => Ok(draft),
+        Err(first_error) => {
+            let repair_messages = vec![
+                DeepSeekMessage {
+                    role: "system".to_string(),
+                    content: system_prompt,
+                },
+                DeepSeekMessage {
+                    role: "user".to_string(),
+                    content: user_prompt,
+                },
+                DeepSeekMessage {
+                    role: "assistant".to_string(),
+                    content: first_completion.content.clone(),
+                },
+                DeepSeekMessage {
+                    role: "user".to_string(),
+                    content: automation_repair_prompt(&first_error),
+                },
+            ];
+            let repaired_completion = request_automation_completion(&api_key, repair_messages)
+                .await
+                .map_err(|err| {
+                    format!(
+                        "DeepSeek 首次返回的草稿无法使用（{first_error}），自动修复请求也失败：{err}。请检查网络后重试，或点击“手动填写”。"
+                    )
+                })?;
+            parse_automation_completion(prompt, &repaired_completion).map_err(|err| {
+                format!(
+                    "DeepSeek 自动修复后仍未生成可用草稿：{err}。请点击“手动填写”直接创建任务。"
+                )
+            })
+        }
+    }
+}
+
+#[derive(Debug)]
+struct AutomationCompletion {
+    content: String,
+    finish_reason: Option<String>,
+}
+
+async fn request_automation_completion(
+    api_key: &str,
+    messages: Vec<DeepSeekMessage>,
+) -> Result<AutomationCompletion, String> {
     let request = DeepSeekRequest {
         model: DEEPSEEK_MODEL.to_string(),
-        temperature: 0.15,
+        temperature: 0.1,
         max_tokens: 2600,
-        messages: vec![
-            DeepSeekMessage {
-                role: "system".to_string(),
-                content: automation_system_prompt(),
-            },
-            DeepSeekMessage {
-                role: "user".to_string(),
-                content: automation_user_prompt(prompt),
-            },
-        ],
+        response_format: Some(DeepSeekResponseFormat {
+            kind: "json_object",
+        }),
+        messages,
     };
-    let completion = send_deepseek_request(&api_key, &request).await?;
-    let content = completion
+    let completion = send_deepseek_request(api_key, &request).await?;
+    let choice = completion
         .choices
         .first()
-        .map(|choice| choice.message.content.trim())
-        .filter(|content| !content.is_empty())
-        .ok_or_else(|| "DeepSeek 没有返回自动化方案".to_string())?;
+        .ok_or_else(|| "DeepSeek 响应中没有候选结果".to_string())?;
+    Ok(AutomationCompletion {
+        content: choice.message.content.clone().unwrap_or_default(),
+        finish_reason: choice.finish_reason.clone(),
+    })
+}
 
-    let draft = serde_json::from_str::<AutomationDraft>(&extract_json(content))
-        .map_err(|_| "DeepSeek 返回的任务格式不完整，请换一种说法再试".to_string())?;
-    validate_job_input(&draft.job).map_err(|err| format!("AI 生成的任务无法使用：{err}"))?;
+fn parse_automation_completion(
+    prompt: &str,
+    completion: &AutomationCompletion,
+) -> Result<AutomationDraft, String> {
+    if completion.finish_reason.as_deref() == Some("length") {
+        return Err("输出达到长度上限，JSON 被截断".to_string());
+    }
+    if completion.content.trim().is_empty() {
+        return Err("没有返回任务内容".to_string());
+    }
+
+    let mut value = parse_json_document(&completion.content)?;
+    normalize_automation_value(prompt, &mut value)?;
+    let draft = serde_json::from_value::<AutomationDraft>(value)
+        .map_err(|err| format!("任务字段不完整或类型不正确：{err}"))?;
+    validate_job_input(&draft.job).map_err(|err| format!("任务参数无效：{err}"))?;
     if draft.job.execution.mode != crate::scheduler::models::ExecutionMode::InlineShell {
-        return Err("AI 生成了 Tick 暂不支持自动创建的脚本类型，请重试".to_string());
+        return Err("脚本类型不是 Tick AI 草稿支持的内联 JavaScript".to_string());
     }
     validate_native_capabilities(prompt, &draft.job.execution.inline_script)?;
     Ok(draft)
@@ -289,7 +372,52 @@ fn write_settings(settings: &AppSettings) -> Result<(), String> {
     file.write_all(&content)
         .and_then(|_| file.sync_all())
         .map_err(|_| "无法保存 Tick 设置".to_string())?;
-    std::fs::rename(temporary_path, path).map_err(|_| "无法替换 Tick 设置".to_string())
+    drop(file);
+
+    if let Err(err) = replace_settings_file(&temporary_path, &path) {
+        let _ = std::fs::remove_file(&temporary_path);
+        return Err(err);
+    }
+    Ok(())
+}
+
+#[cfg(target_os = "macos")]
+fn replace_settings_file(temporary_path: &Path, path: &Path) -> Result<(), String> {
+    std::fs::rename(temporary_path, path).map_err(|err| format!("无法替换 Tick 设置：{err}"))?;
+    let directory = path
+        .parent()
+        .ok_or_else(|| "无法确定应用配置目录".to_string())?;
+    std::fs::File::open(directory)
+        .and_then(|file| file.sync_all())
+        .map_err(|err| format!("无法同步 Tick 设置目录：{err}"))
+}
+
+#[cfg(target_os = "windows")]
+fn replace_settings_file(temporary_path: &Path, path: &Path) -> Result<(), String> {
+    use std::os::windows::ffi::OsStrExt;
+    use windows::core::PCWSTR;
+    use windows::Win32::Storage::FileSystem::{
+        MoveFileExW, MOVEFILE_REPLACE_EXISTING, MOVEFILE_WRITE_THROUGH,
+    };
+
+    let temporary_wide = temporary_path
+        .as_os_str()
+        .encode_wide()
+        .chain(std::iter::once(0))
+        .collect::<Vec<_>>();
+    let path_wide = path
+        .as_os_str()
+        .encode_wide()
+        .chain(std::iter::once(0))
+        .collect::<Vec<_>>();
+    unsafe {
+        MoveFileExW(
+            PCWSTR(temporary_wide.as_ptr()),
+            PCWSTR(path_wide.as_ptr()),
+            MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH,
+        )
+    }
+    .map_err(|err| format!("无法替换 Tick 设置：{err}"))
 }
 
 fn validate_api_key(value: &str) -> Result<&str, String> {
@@ -377,6 +505,8 @@ fn automation_system_prompt() -> String {
         r#"{"job":{"name":"任务名","description":"一句话说明","schedule":{"mode":"calendar","calendar":{"month":null,"day":null,"hour":9,"minute":0,"second":0},"interval":{"seconds":3600}},"execution":{"mode":"inline_shell","inlineScript":"可直接由 Node.js 执行的 JavaScript","scriptPath":"","interpreter":"/usr/bin/env node","arguments":"","workingDirectory":"","environment":[]}},"summary":"这个自动化会做什么","risks":["风险或权限提示"]}"#,
         "规则：",
         "- schedule.mode 只能是 calendar 或 interval。",
+        "- JSON 示例中的字段必须全部保留；当前模式用不到的 calendar、interval 和 execution 字段也不能省略。",
+        "- “N 分钟/小时后”按固定间隔草稿处理，并在 risks 中明确说明它会重复运行，需要用户在首次运行后手动停用。",
         "- 用户没说时间时，默认每天 09:00，并在 risks 中说明这个假设。",
         "- execution.mode 必须是 inline_shell，脚本必须是完整 Node.js JavaScript，只使用内置模块。",
         "- 需要调用 macOS 能力时可用 node:child_process 的 execFile/execFileSync，禁止拼接 shell 命令。",
@@ -402,6 +532,8 @@ fn automation_system_prompt() -> String {
         r#"{"job":{"name":"任务名","description":"一句话说明","schedule":{"mode":"calendar","calendar":{"month":null,"day":null,"hour":9,"minute":0,"second":0},"interval":{"seconds":3600}},"execution":{"mode":"inline_shell","inlineScript":"可直接由 Node.js 执行的 JavaScript","scriptPath":"","interpreter":"node.exe","arguments":"","workingDirectory":"","environment":[]}},"summary":"这个自动化会做什么","risks":["风险或权限提示"]}"#,
         "规则：",
         "- schedule.mode 只能是 calendar 或 interval；interval.seconds 必须在 60 到 2678400 之间。",
+        "- JSON 示例中的字段必须全部保留；当前模式用不到的 calendar、interval 和 execution 字段也不能省略。",
+        "- “N 分钟/小时后”按固定间隔草稿处理，并在 risks 中明确说明它会重复运行，需要用户在首次运行后手动停用。",
         "- 用户没说时间时，默认每天 09:00，并在 risks 中说明这个假设。",
         "- execution.mode 必须是 inline_shell，脚本必须是完整 Node.js JavaScript，只使用内置模块。",
         "- 调用 Windows 程序时只使用 node:child_process 的 execFile/execFileSync 和参数数组，禁止拼接 cmd、PowerShell 或其他 shell 命令。",
@@ -425,19 +557,376 @@ fn automation_user_prompt(prompt: &str) -> String {
     )
 }
 
-fn extract_json(content: &str) -> String {
-    let trimmed = content.trim();
-    if !trimmed.starts_with("```") {
-        return trimmed.to_string();
+fn automation_repair_prompt(error: &str) -> String {
+    format!(
+        "上一个 JSON 没有通过 Tick 校验，原因：{error}。请保留用户原意，补齐或修正字段，只输出一份完整 JSON。"
+    )
+}
+
+fn parse_json_document(content: &str) -> Result<Value, String> {
+    let trimmed = content.trim().trim_start_matches('\u{feff}').trim();
+    if let Ok(value) = serde_json::from_str::<Value>(trimmed) {
+        return Ok(value);
     }
-    trimmed
-        .lines()
-        .skip(1)
-        .take_while(|line| !line.trim_start().starts_with("```"))
-        .collect::<Vec<_>>()
-        .join("\n")
-        .trim()
-        .to_string()
+
+    let object = extract_first_json_object(trimmed).or_else(|| {
+        let start = trimmed.find('{')?;
+        Some(&trimmed[start..])
+    });
+    let object = object.ok_or_else(|| "返回内容里没有找到 JSON 对象".to_string())?;
+    serde_json::from_str::<Value>(object).map_err(|err| {
+        if err.is_eof() {
+            "返回的 JSON 在结束前被截断".to_string()
+        } else {
+            format!(
+                "返回的 JSON 语法错误（第 {} 行第 {} 列）",
+                err.line(),
+                err.column()
+            )
+        }
+    })
+}
+
+fn extract_first_json_object(content: &str) -> Option<&str> {
+    let start = content.find('{')?;
+    let mut depth = 0_u32;
+    let mut in_string = false;
+    let mut escaped = false;
+
+    for (offset, character) in content[start..].char_indices() {
+        if in_string {
+            if escaped {
+                escaped = false;
+            } else if character == '\\' {
+                escaped = true;
+            } else if character == '"' {
+                in_string = false;
+            }
+            continue;
+        }
+
+        match character {
+            '"' => in_string = true,
+            '{' => depth += 1,
+            '}' => {
+                depth = depth.checked_sub(1)?;
+                if depth == 0 {
+                    let end = start + offset + character.len_utf8();
+                    return Some(&content[start..end]);
+                }
+            }
+            _ => {}
+        }
+    }
+    None
+}
+
+fn normalize_automation_value(prompt: &str, value: &mut Value) -> Result<(), String> {
+    let root = value
+        .as_object_mut()
+        .ok_or_else(|| "顶层内容不是 JSON 对象".to_string())?;
+    alias_field(root, "job", &["task", "automation"]);
+
+    if !root.contains_key("job")
+        && (root.contains_key("schedule") || root.contains_key("execution"))
+    {
+        let job = Value::Object(root.clone());
+        root.insert("job".to_string(), job);
+    }
+    let inferred_interval = interval_seconds_from_prompt(prompt);
+    let relative_time = relative_duration_from_prompt(prompt).is_some();
+
+    let job = root
+        .get_mut("job")
+        .and_then(Value::as_object_mut)
+        .ok_or_else(|| "缺少 job 任务对象".to_string())?;
+    alias_field(job, "name", &["title", "label"]);
+    alias_field(job, "description", &["detail"]);
+    if job.get("description").is_none_or(Value::is_null) {
+        job.insert("description".to_string(), Value::String(String::new()));
+    }
+    normalize_schedule(job, inferred_interval)?;
+    normalize_execution(job)?;
+
+    if root.get("summary").is_none_or(Value::is_null) {
+        root.insert(
+            "summary".to_string(),
+            Value::String("AI 生成的任务草稿".to_string()),
+        );
+    }
+    normalize_risks(root);
+    if relative_time {
+        append_risk(
+            root,
+            "Tick 会把“几分钟/小时后”转换为固定间隔任务，因此会重复运行；如果只需要一次，请在首次运行后停用任务。",
+        );
+    }
+    Ok(())
+}
+
+fn normalize_schedule(
+    job: &mut Map<String, Value>,
+    inferred_interval: Option<u32>,
+) -> Result<(), String> {
+    job.entry("schedule".to_string())
+        .or_insert_with(|| Value::Object(Map::new()));
+    let schedule = job
+        .get_mut("schedule")
+        .and_then(Value::as_object_mut)
+        .ok_or_else(|| "job.schedule 不是对象".to_string())?;
+    alias_field(schedule, "mode", &["type"]);
+
+    let mode = inferred_interval.map(|_| "interval").or_else(|| {
+        schedule
+            .get("mode")
+            .and_then(Value::as_str)
+            .map(canonical_schedule_mode)
+    });
+    let mode = mode.unwrap_or("calendar");
+    schedule.insert("mode".to_string(), Value::String(mode.to_string()));
+
+    if let Some(interval) = schedule.get_mut("interval") {
+        if !interval.is_object() {
+            let seconds = value_to_u32(interval).unwrap_or_default();
+            *interval = serde_json::json!({ "seconds": seconds });
+        }
+    } else {
+        schedule.insert("interval".to_string(), Value::Object(Map::new()));
+    }
+    let direct_seconds = schedule
+        .get("seconds")
+        .and_then(value_to_u32)
+        .or_else(|| schedule.get("intervalSeconds").and_then(value_to_u32));
+    let interval = schedule
+        .get_mut("interval")
+        .and_then(Value::as_object_mut)
+        .ok_or_else(|| "job.schedule.interval 不是对象".to_string())?;
+    alias_field(interval, "seconds", &["intervalSeconds"]);
+    let unit_seconds = interval
+        .get("minutes")
+        .and_then(value_to_u32)
+        .and_then(|value| value.checked_mul(60))
+        .or_else(|| {
+            interval
+                .get("hours")
+                .and_then(value_to_u32)
+                .and_then(|value| value.checked_mul(3600))
+        });
+    let seconds = inferred_interval
+        .or_else(|| interval.get("seconds").and_then(value_to_u32))
+        .or(direct_seconds)
+        .or(unit_seconds)
+        .unwrap_or(if mode == "interval" { 0 } else { 3600 });
+    interval.insert("seconds".to_string(), Value::from(seconds));
+
+    schedule
+        .entry("calendar".to_string())
+        .or_insert_with(|| Value::Object(Map::new()));
+    let calendar = schedule
+        .get_mut("calendar")
+        .and_then(Value::as_object_mut)
+        .ok_or_else(|| "job.schedule.calendar 不是对象".to_string())?;
+    for field in ["month", "day"] {
+        calendar.entry(field.to_string()).or_insert(Value::Null);
+    }
+    calendar.entry("hour".to_string()).or_insert_with(|| {
+        if mode == "calendar" {
+            Value::from(9)
+        } else {
+            Value::Null
+        }
+    });
+    calendar.entry("minute".to_string()).or_insert_with(|| {
+        if mode == "calendar" {
+            Value::from(0)
+        } else {
+            Value::Null
+        }
+    });
+    calendar
+        .entry("second".to_string())
+        .or_insert_with(|| Value::from(0));
+    normalize_numeric_fields(calendar, &["month", "day", "hour", "minute", "second"]);
+    Ok(())
+}
+
+fn normalize_execution(job: &mut Map<String, Value>) -> Result<(), String> {
+    job.entry("execution".to_string())
+        .or_insert_with(|| Value::Object(Map::new()));
+    let execution = job
+        .get_mut("execution")
+        .and_then(Value::as_object_mut)
+        .ok_or_else(|| "job.execution 不是对象".to_string())?;
+    alias_field(
+        execution,
+        "inlineScript",
+        &["inline_script", "script", "code"],
+    );
+    alias_field(execution, "scriptPath", &["script_path"]);
+    alias_field(execution, "workingDirectory", &["working_directory", "cwd"]);
+    alias_field(execution, "environment", &["env"]);
+
+    let mode = execution
+        .get("mode")
+        .and_then(Value::as_str)
+        .map(canonical_execution_mode)
+        .unwrap_or("inline_shell");
+    execution.insert("mode".to_string(), Value::String(mode.to_string()));
+    for field in [
+        "inlineScript",
+        "scriptPath",
+        "arguments",
+        "workingDirectory",
+    ] {
+        execution
+            .entry(field.to_string())
+            .or_insert_with(|| Value::String(String::new()));
+    }
+    execution
+        .entry("interpreter".to_string())
+        .or_insert_with(|| Value::String(default_ai_interpreter().to_string()));
+
+    match execution.get_mut("environment") {
+        Some(Value::Object(values)) => {
+            let entries = std::mem::take(values)
+                .into_iter()
+                .map(|(key, value)| {
+                    serde_json::json!({
+                        "key": key,
+                        "value": value.as_str().unwrap_or_default()
+                    })
+                })
+                .collect();
+            execution.insert("environment".to_string(), Value::Array(entries));
+        }
+        Some(Value::Array(_)) => {}
+        Some(_) | None => {
+            execution.insert("environment".to_string(), Value::Array(Vec::new()));
+        }
+    }
+    Ok(())
+}
+
+fn normalize_risks(root: &mut Map<String, Value>) {
+    match root.get_mut("risks") {
+        Some(Value::String(risk)) => {
+            let risk = std::mem::take(risk);
+            root.insert("risks".to_string(), Value::Array(vec![Value::String(risk)]));
+        }
+        Some(Value::Array(_)) => {}
+        Some(_) | None => {
+            root.insert("risks".to_string(), Value::Array(Vec::new()));
+        }
+    }
+}
+
+fn append_risk(root: &mut Map<String, Value>, risk: &str) {
+    if let Some(risks) = root.get_mut("risks").and_then(Value::as_array_mut) {
+        if !risks.iter().any(|value| value.as_str() == Some(risk)) {
+            risks.push(Value::String(risk.to_string()));
+        }
+    }
+}
+
+fn alias_field(object: &mut Map<String, Value>, canonical: &str, aliases: &[&str]) {
+    if object.contains_key(canonical) {
+        return;
+    }
+    for alias in aliases {
+        if let Some(value) = object.remove(*alias) {
+            object.insert(canonical.to_string(), value);
+            return;
+        }
+    }
+}
+
+fn canonical_schedule_mode(value: &str) -> &'static str {
+    match value.to_ascii_lowercase().as_str() {
+        "interval" | "fixed_interval" | "repeat" | "recurring" | "relative" | "once" => "interval",
+        _ => "calendar",
+    }
+}
+
+fn canonical_execution_mode(value: &str) -> &'static str {
+    match value.to_ascii_lowercase().as_str() {
+        "inline" | "inline_js" | "javascript" | "node" => "inline_shell",
+        "file" => "script_path",
+        "script_path" => "script_path",
+        "interpreter" => "interpreter",
+        _ => "inline_shell",
+    }
+}
+
+fn normalize_numeric_fields(object: &mut Map<String, Value>, fields: &[&str]) {
+    for field in fields {
+        if let Some(value) = object.get_mut(*field) {
+            if let Some(number) = value_to_u32(value) {
+                *value = Value::from(number);
+            }
+        }
+    }
+}
+
+fn value_to_u32(value: &Value) -> Option<u32> {
+    value
+        .as_u64()
+        .and_then(|number| u32::try_from(number).ok())
+        .or_else(|| value.as_str()?.trim().parse().ok())
+}
+
+fn interval_seconds_from_prompt(prompt: &str) -> Option<u32> {
+    relative_duration_from_prompt(prompt).or_else(|| repeated_duration_from_prompt(prompt))
+}
+
+fn relative_duration_from_prompt(prompt: &str) -> Option<u32> {
+    duration_from_prompt(prompt, true)
+}
+
+fn repeated_duration_from_prompt(prompt: &str) -> Option<u32> {
+    duration_from_prompt(prompt, false)
+}
+
+fn duration_from_prompt(prompt: &str, relative: bool) -> Option<u32> {
+    for (unit, multiplier) in [("分钟", 60_u32), ("小时", 3600), ("秒", 1), ("天", 86400)] {
+        for (index, _) in prompt.match_indices(unit) {
+            let prefix = &prompt[..index];
+            let suffix = &prompt[index + unit.len()..];
+            let Some((number, before_number)) = trailing_ascii_number(prefix) else {
+                continue;
+            };
+            let matches_expression = if relative {
+                suffix.trim_start().starts_with('后')
+            } else {
+                before_number.trim_end().ends_with('每')
+            };
+            if matches_expression {
+                return number.checked_mul(multiplier);
+            }
+        }
+    }
+    None
+}
+
+fn trailing_ascii_number(value: &str) -> Option<(u32, &str)> {
+    let trimmed = value.trim_end();
+    let digits_start = trimmed
+        .char_indices()
+        .rev()
+        .take_while(|(_, character)| character.is_ascii_digit())
+        .map(|(index, _)| index)
+        .last()?;
+    let number = trimmed[digits_start..].parse().ok()?;
+    Some((number, &trimmed[..digits_start]))
+}
+
+#[cfg(target_os = "macos")]
+fn default_ai_interpreter() -> &'static str {
+    "/usr/bin/env node"
+}
+
+#[cfg(target_os = "windows")]
+fn default_ai_interpreter() -> &'static str {
+    "node.exe"
 }
 
 #[cfg(target_os = "macos")]
@@ -477,7 +966,14 @@ fn trim_error_body(body: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{mask_api_key, validate_api_key, validate_native_capabilities};
+    #[cfg(target_os = "macos")]
+    use super::validate_native_capabilities;
+    use super::{
+        mask_api_key, parse_automation_completion, parse_json_document, replace_settings_file,
+        validate_api_key, AutomationCompletion,
+    };
+    use crate::scheduler::models::{ExecutionMode, ScheduleMode};
+    use std::time::{SystemTime, UNIX_EPOCH};
 
     #[test]
     fn validates_api_key_length_without_requiring_a_specific_prefix() {
@@ -490,6 +986,92 @@ mod tests {
     fn masks_all_but_a_safe_hint() {
         assert_eq!(mask_api_key("sk-1234567890"), "sk-••••7890");
         assert_eq!(mask_api_key("abcdefghijkl"), "••••ijkl");
+    }
+
+    #[test]
+    fn extracts_json_from_fences_or_surrounding_explanation() {
+        let fenced = "```json\n{\"value\":\"brace } in string\"}\n```";
+        assert_eq!(
+            parse_json_document(fenced).unwrap()["value"],
+            "brace } in string"
+        );
+
+        let explained = "这是草稿：\n{\"value\": 1}\n请检查。";
+        assert_eq!(parse_json_document(explained).unwrap()["value"], 1);
+    }
+
+    #[test]
+    fn reports_truncated_json_instead_of_a_generic_format_error() {
+        let error = parse_json_document("```json\n{\"job\": {").unwrap_err();
+        assert!(error.contains("截断"), "{error}");
+    }
+
+    #[test]
+    fn repairs_common_ai_shape_for_relative_minute_prompt() {
+        let completion = AutomationCompletion {
+            content: r#"
+                Here is the JSON draft:
+                {
+                  "task": {
+                    "title": "一分钟后提示",
+                    "schedule": {
+                      "type": "calendar",
+                      "interval": { "minutes": 5 }
+                    },
+                    "execution": {
+                      "mode": "javascript",
+                      "script": "console.log('时间到了')"
+                    }
+                  },
+                  "summary": "一分钟后执行提示脚本",
+                  "risks": "Windows 原生通知需要用户确认实现方式"
+                }
+            "#
+            .to_string(),
+            finish_reason: Some("stop".to_string()),
+        };
+
+        let draft = parse_automation_completion("1分钟后提示我", &completion).unwrap();
+        assert_eq!(draft.job.name, "一分钟后提示");
+        assert_eq!(draft.job.schedule.mode, ScheduleMode::Interval);
+        assert_eq!(draft.job.schedule.interval.seconds, 60);
+        assert_eq!(draft.job.execution.mode, ExecutionMode::InlineShell);
+        assert_eq!(draft.job.execution.inline_script, "console.log('时间到了')");
+        assert!(draft.risks.iter().any(|risk| risk.contains("重复运行")));
+    }
+
+    #[test]
+    fn rejects_completion_cut_off_by_token_limit() {
+        let completion = AutomationCompletion {
+            content: "{\"job\":".to_string(),
+            finish_reason: Some("length".to_string()),
+        };
+        let error = parse_automation_completion("每天运行", &completion).unwrap_err();
+        assert!(error.contains("长度上限"), "{error}");
+    }
+
+    #[test]
+    fn atomically_replaces_an_existing_settings_file() {
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let directory = std::env::temp_dir().join(format!(
+            "tick-settings-replace-{}-{unique}",
+            std::process::id()
+        ));
+        std::fs::create_dir(&directory).unwrap();
+        let path = directory.join("settings.json");
+        let temporary_path = directory.join("settings.json.tmp");
+        std::fs::write(&path, b"old-key").unwrap();
+        std::fs::write(&temporary_path, b"new-key").unwrap();
+
+        replace_settings_file(&temporary_path, &path).unwrap();
+
+        assert_eq!(std::fs::read(&path).unwrap(), b"new-key");
+        assert!(!temporary_path.exists());
+        std::fs::remove_file(path).unwrap();
+        std::fs::remove_dir(directory).unwrap();
     }
 
     #[cfg(target_os = "macos")]

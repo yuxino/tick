@@ -1,4 +1,4 @@
-import { Button, Input, Modal, Space, Typography, message } from "antd";
+import { Alert, Button, Input, Modal, Space, Typography, message } from "antd";
 import { useState } from "react";
 import { generateAutomation, type AutomationDraft } from "../services/scheduler";
 import type { SchedulerCapabilities } from "../types/scheduler";
@@ -15,12 +15,19 @@ interface AutomationModalProps {
 export function AutomationModal({ open, capabilities, onCancel, onManual, onGenerated }: AutomationModalProps) {
   const [prompt, setPrompt] = useState("");
   const [generating, setGenerating] = useState(false);
+  const [generationError, setGenerationError] = useState<string>();
+
+  function switchToManual() {
+    setGenerationError(undefined);
+    onManual();
+  }
 
   async function generate() {
     if (!prompt.trim()) {
       message.warning(`先说说你想让 ${capabilities.computerLabel} 自动做什么`);
       return;
     }
+    setGenerationError(undefined);
     setGenerating(true);
     try {
       const draft = await generateAutomation(prompt);
@@ -28,7 +35,7 @@ export function AutomationModal({ open, capabilities, onCancel, onManual, onGene
       setPrompt("");
       message.success("自动化草稿已经搭好了");
     } catch (error) {
-      message.error(friendlyError(error));
+      setGenerationError(friendlyError(error));
     } finally {
       setGenerating(false);
     }
@@ -41,13 +48,16 @@ export function AutomationModal({ open, capabilities, onCancel, onManual, onGene
       width={560}
       footer={
         <Space>
-          <Button onClick={onManual}>手动填写</Button>
+          <Button onClick={switchToManual}>手动填写</Button>
           <Button type="primary" loading={generating} onClick={generate}>
             继续
           </Button>
         </Space>
       }
-      onCancel={onCancel}
+      onCancel={() => {
+        setGenerationError(undefined);
+        onCancel();
+      }}
       destroyOnHidden
     >
       <div className="automation-composer">
@@ -60,8 +70,24 @@ export function AutomationModal({ open, capabilities, onCancel, onManual, onGene
           autoFocus
           autoSize={{ minRows: 4, maxRows: 8 }}
           placeholder={`例如：每天晚上 11 点，把下载目录里超过 30 天的安装包移到${capabilities.trashLabel}，完成后发一条通知。`}
-          onChange={(event) => setPrompt(event.target.value)}
+          onChange={(event) => {
+            setPrompt(event.target.value);
+            setGenerationError(undefined);
+          }}
         />
+        {generationError && (
+          <Alert
+            type="error"
+            showIcon
+            title="AI 草稿生成失败"
+            description={generationError}
+            action={
+              <Button size="small" onClick={switchToManual}>
+                改为手动填写
+              </Button>
+            }
+          />
+        )}
       </div>
     </Modal>
   );
