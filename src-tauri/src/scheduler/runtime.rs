@@ -211,7 +211,7 @@ async fn probe_node_command(command: &[String]) -> NodeRuntimeStatus {
 }
 
 #[cfg(target_os = "windows")]
-fn hide_windows_console(command: &mut Command) {
+pub(crate) fn hide_windows_console(command: &mut Command) {
     use std::os::windows::process::CommandExt;
     const CREATE_NO_WINDOW: u32 = 0x0800_0000;
     command.as_std_mut().creation_flags(CREATE_NO_WINDOW);

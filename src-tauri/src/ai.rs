@@ -1,10 +1,11 @@
+use crate::file_ops::replace_file;
 use crate::scheduler::models::ScheduledJobInput;
 use crate::scheduler::validation::validate_job_input;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use std::fs::OpenOptions;
 use std::io::Write;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
 use tokio::process::Command as TokioCommand;
 use tokio::time::{timeout, Duration};
@@ -294,9 +295,7 @@ pub async fn run_node_script_debug(
 
     #[cfg(target_os = "windows")]
     {
-        use std::os::windows::process::CommandExt;
-        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
-        command.as_std_mut().creation_flags(CREATE_NO_WINDOW);
+        crate::scheduler::runtime::hide_windows_console(&mut command);
         command.env(
             "TICK_EXECUTABLE",
             std::env::current_exe().map_err(|err| format!("无法确定 Tick 程序路径：{err}"))?,
@@ -386,50 +385,11 @@ fn write_settings(settings: &AppSettings) -> Result<(), String> {
         .map_err(|_| "无法保存 Tick 设置".to_string())?;
     drop(file);
 
-    if let Err(err) = replace_settings_file(&temporary_path, &path) {
+    if let Err(err) = replace_file(&temporary_path, &path, "Tick 设置") {
         let _ = std::fs::remove_file(&temporary_path);
         return Err(err);
     }
     Ok(())
-}
-
-#[cfg(target_os = "macos")]
-fn replace_settings_file(temporary_path: &Path, path: &Path) -> Result<(), String> {
-    std::fs::rename(temporary_path, path).map_err(|err| format!("无法替换 Tick 设置：{err}"))?;
-    let directory = path
-        .parent()
-        .ok_or_else(|| "无法确定应用配置目录".to_string())?;
-    std::fs::File::open(directory)
-        .and_then(|file| file.sync_all())
-        .map_err(|err| format!("无法同步 Tick 设置目录：{err}"))
-}
-
-#[cfg(target_os = "windows")]
-fn replace_settings_file(temporary_path: &Path, path: &Path) -> Result<(), String> {
-    use std::os::windows::ffi::OsStrExt;
-    use windows::core::PCWSTR;
-    use windows::Win32::Storage::FileSystem::{
-        MoveFileExW, MOVEFILE_REPLACE_EXISTING, MOVEFILE_WRITE_THROUGH,
-    };
-
-    let temporary_wide = temporary_path
-        .as_os_str()
-        .encode_wide()
-        .chain(std::iter::once(0))
-        .collect::<Vec<_>>();
-    let path_wide = path
-        .as_os_str()
-        .encode_wide()
-        .chain(std::iter::once(0))
-        .collect::<Vec<_>>();
-    unsafe {
-        MoveFileExW(
-            PCWSTR(temporary_wide.as_ptr()),
-            PCWSTR(path_wide.as_ptr()),
-            MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH,
-        )
-    }
-    .map_err(|err| format!("无法替换 Tick 设置：{err}"))
 }
 
 fn validate_api_key(value: &str) -> Result<&str, String> {
@@ -1008,11 +968,10 @@ mod tests {
     #[cfg(target_os = "macos")]
     use super::validate_native_capabilities;
     use super::{
-        mask_api_key, parse_automation_completion, parse_json_document, replace_settings_file,
-        validate_api_key, validate_windows_native_capabilities, AutomationCompletion,
+        mask_api_key, parse_automation_completion, parse_json_document, validate_api_key,
+        validate_windows_native_capabilities, AutomationCompletion,
     };
     use crate::scheduler::models::{ExecutionMode, ScheduleMode};
-    use std::time::{SystemTime, UNIX_EPOCH};
 
     #[test]
     fn validates_api_key_length_without_requiring_a_specific_prefix() {
@@ -1087,30 +1046,6 @@ mod tests {
         };
         let error = parse_automation_completion("每天运行", &completion).unwrap_err();
         assert!(error.contains("长度上限"), "{error}");
-    }
-
-    #[test]
-    fn atomically_replaces_an_existing_settings_file() {
-        let unique = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_nanos();
-        let directory = std::env::temp_dir().join(format!(
-            "tick-settings-replace-{}-{unique}",
-            std::process::id()
-        ));
-        std::fs::create_dir(&directory).unwrap();
-        let path = directory.join("settings.json");
-        let temporary_path = directory.join("settings.json.tmp");
-        std::fs::write(&path, b"old-key").unwrap();
-        std::fs::write(&temporary_path, b"new-key").unwrap();
-
-        replace_settings_file(&temporary_path, &path).unwrap();
-
-        assert_eq!(std::fs::read(&path).unwrap(), b"new-key");
-        assert!(!temporary_path.exists());
-        std::fs::remove_file(path).unwrap();
-        std::fs::remove_dir(directory).unwrap();
     }
 
     #[cfg(target_os = "macos")]

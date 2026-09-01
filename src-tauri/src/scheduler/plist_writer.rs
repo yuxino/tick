@@ -1,6 +1,7 @@
 use super::executor::{command_args, materialize_execution};
 use super::models::{ScheduleMode, ScheduledJob};
 use super::paths::{definition_path, ensure_dirs, wrapper_path};
+use crate::file_ops::remove_file_if_exists;
 use plist::{Dictionary, Value};
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
@@ -140,14 +141,6 @@ fn make_executable(path: &PathBuf) -> Result<(), String> {
 pub fn remove_job_files(job: &ScheduledJob) -> Result<(), String> {
     remove_file_if_exists(&definition_path(&job.id, &job.label)?)?;
     remove_file_if_exists(&wrapper_path(&job.id)?)
-}
-
-fn remove_file_if_exists(path: &std::path::Path) -> Result<(), String> {
-    match fs::remove_file(path) {
-        Ok(()) => Ok(()),
-        Err(err) if err.kind() == std::io::ErrorKind::NotFound => Ok(()),
-        Err(err) => Err(format!("无法删除 {}：{err}", path.display())),
-    }
 }
 
 #[cfg(test)]

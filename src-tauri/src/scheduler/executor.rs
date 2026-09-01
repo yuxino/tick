@@ -2,6 +2,7 @@ use super::models::{ExecutionMode, ScheduledJob};
 #[cfg(target_os = "macos")]
 use super::paths::scripts_dir;
 use super::paths::{ensure_dirs, inline_script_path, stderr_path, stdout_path};
+use crate::file_ops::remove_file_if_exists;
 use std::fs::OpenOptions;
 use std::path::PathBuf;
 #[cfg(target_os = "macos")]
@@ -117,14 +118,6 @@ pub fn remove_materialized_execution(job: &ScheduledJob) -> Result<(), String> {
 pub fn remove_logs(job: &ScheduledJob) -> Result<(), String> {
     remove_file_if_exists(&stdout_path(&job.id)?)?;
     remove_file_if_exists(&stderr_path(&job.id)?)
-}
-
-fn remove_file_if_exists(path: &std::path::Path) -> Result<(), String> {
-    match std::fs::remove_file(path) {
-        Ok(()) => Ok(()),
-        Err(err) if err.kind() == std::io::ErrorKind::NotFound => Ok(()),
-        Err(err) => Err(format!("无法删除 {}：{err}", path.display())),
-    }
 }
 
 #[cfg(target_os = "macos")]

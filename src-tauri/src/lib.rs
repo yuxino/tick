@@ -1,4 +1,5 @@
 mod ai;
+mod file_ops;
 mod scheduler;
 
 use tauri::{

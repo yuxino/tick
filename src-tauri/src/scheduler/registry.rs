@@ -3,6 +3,7 @@ use super::paths::{
     ensure_dirs, normalize_managed_paths, registry_lock_path, registry_path,
     scheduler_operation_lock_path, validate_job_id,
 };
+use crate::file_ops::replace_file;
 use fs2::FileExt;
 use std::fs::{File, OpenOptions};
 use std::io::{Read, Write};
@@ -120,7 +121,7 @@ fn write_registry_unlocked(path: &Path, jobs: &[ScheduledJob]) -> Result<(), Str
     }
     drop(file);
 
-    if let Err(err) = replace_registry_file(&temporary_path, path) {
+    if let Err(err) = replace_file(&temporary_path, path, "Tick 任务索引") {
         let _ = std::fs::remove_file(&temporary_path);
         return Err(err);
     }
@@ -134,75 +135,4 @@ fn temporary_registry_path(path: &Path) -> Result<PathBuf, String> {
     let mut temporary_name = file_name.to_os_string();
     temporary_name.push(".tmp");
     Ok(path.with_file_name(temporary_name))
-}
-
-#[cfg(target_os = "macos")]
-fn replace_registry_file(temporary_path: &Path, path: &Path) -> Result<(), String> {
-    std::fs::rename(temporary_path, path)
-        .map_err(|err| format!("无法替换 Tick 任务索引：{err}"))?;
-    let parent = path
-        .parent()
-        .ok_or_else(|| "Tick 任务索引路径无效".to_string())?;
-    File::open(parent)
-        .and_then(|directory| directory.sync_all())
-        .map_err(|err| format!("无法同步 Tick 任务索引目录：{err}"))
-}
-
-#[cfg(target_os = "windows")]
-fn replace_registry_file(temporary_path: &Path, path: &Path) -> Result<(), String> {
-    use std::os::windows::ffi::OsStrExt;
-    use windows::core::PCWSTR;
-    use windows::Win32::Storage::FileSystem::{
-        MoveFileExW, MOVEFILE_REPLACE_EXISTING, MOVEFILE_WRITE_THROUGH,
-    };
-
-    let temporary_wide = temporary_path
-        .as_os_str()
-        .encode_wide()
-        .chain(std::iter::once(0))
-        .collect::<Vec<_>>();
-    let path_wide = path
-        .as_os_str()
-        .encode_wide()
-        .chain(std::iter::once(0))
-        .collect::<Vec<_>>();
-    unsafe {
-        MoveFileExW(
-            PCWSTR(temporary_wide.as_ptr()),
-            PCWSTR(path_wide.as_ptr()),
-            MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH,
-        )
-    }
-    .map_err(|err| format!("无法替换 Tick 任务索引：{err}"))
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use std::time::{SystemTime, UNIX_EPOCH};
-
-    #[test]
-    fn atomically_replaces_registry_from_the_same_directory() {
-        let unique = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_nanos();
-        let directory = std::env::temp_dir().join(format!(
-            "tick-registry-replace-{}-{unique}",
-            std::process::id()
-        ));
-        std::fs::create_dir(&directory).unwrap();
-        let path = directory.join("scheduled-jobs.json");
-        let temporary_path = temporary_registry_path(&path).unwrap();
-        assert_eq!(temporary_path.parent(), path.parent());
-        std::fs::write(&path, b"old").unwrap();
-        std::fs::write(&temporary_path, b"new").unwrap();
-
-        replace_registry_file(&temporary_path, &path).unwrap();
-
-        assert_eq!(std::fs::read(&path).unwrap(), b"new");
-        assert!(!temporary_path.exists());
-        std::fs::remove_file(path).unwrap();
-        std::fs::remove_dir(directory).unwrap();
-    }
 }
