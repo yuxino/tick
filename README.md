@@ -25,6 +25,8 @@ macOS 使用当前用户 LaunchAgent，Windows 使用当前用户 Task Scheduler
 
 [最新版本](https://github.com/yuxino/tick/releases/latest) 提供 Apple 芯片 macOS DMG，以及 Windows x64 和 ARM64 当前用户 NSIS 安装包。Windows x64 已在 Windows 11 ARM64 的 x64 兼容环境完成[安装和核心交互验收](docs/validation/windows-11-arm64-x64-compat-2026-08-31.md)；Windows ARM64 已通过 CI 构建和架构校验，原生交互尚未验收。macOS 包未经 Apple 公证，Windows 包未做 Authenticode 签名，系统可能显示来源或发布者提示。
 
+v0.1.4 是应用内更新的 bootstrap 版本：v0.1.3 及更旧版本仍需从 Releases 手动安装一次。之后可在“设置 → 应用更新”中主动检查、查看版本说明并安装经过签名验证的更新；Tick 不会后台下载或静默安装。
+
 JavaScript 任务需要用户自行安装 Node.js。Tick 会检测可用版本，但不会安装 Node.js 或修改 PATH。调度环境不读取交互式 shell profile，Node、脚本和工作目录建议填写绝对路径。
 
 ## 数据与隐私

@@ -4,6 +4,16 @@
   "description": "Capability for the main window",
   "windows": ["main"],
   "permissions": [
-    "core:default"
+    "core:default",
+    "updater:default",
+    "process:allow-restart",
+    {
+      "identifier": "opener:allow-open-url",
+      "allow": [
+        {
+          "url": "https://github.com/yuxino/tick/releases"
+        }
+      ]
+    }
   ]
 }

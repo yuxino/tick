@@ -1222,6 +1222,12 @@ button:focus-visible,
   gap: 24px;
 }
 
+.settings-modal .ant-modal-body {
+  max-height: calc(100vh - 190px);
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
 .settings-section {
   display: grid;
   gap: 18px;
@@ -1263,6 +1269,87 @@ button:focus-visible,
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 8px;
+}
+
+.update-status {
+  display: grid;
+  min-height: 42px;
+  gap: 12px;
+}
+
+.update-status .ant-typography {
+  margin: 0;
+}
+
+.update-release {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--paper-soft);
+}
+
+.update-release-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.update-release-heading strong {
+  font-size: 13px;
+}
+
+.update-release-heading span,
+.update-progress > span {
+  color: var(--muted);
+  font-family: "SF Mono", "Menlo", monospace;
+  font-size: 10px;
+}
+
+.update-release-notes {
+  max-height: 132px;
+  overflow: auto;
+  color: var(--ink-soft);
+  font-size: 11px;
+  white-space: pre-wrap;
+}
+
+.update-progress {
+  display: grid;
+  gap: 6px;
+}
+
+.update-progress-indeterminate {
+  position: relative;
+  height: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--paper-deep);
+}
+
+.update-progress-indeterminate i {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 34%;
+  border-radius: inherit;
+  background: var(--accent);
+  animation: update-progress-slide 1.1s ease-in-out infinite;
+}
+
+@keyframes update-progress-slide {
+  from { transform: translateX(-105%); }
+  to { transform: translateX(305%); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .update-progress-indeterminate i {
+    width: 100%;
+    animation: none;
+    opacity: 0.4;
+  }
 }
 
 .automation-draft-summary {

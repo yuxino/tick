@@ -45,8 +45,37 @@ jobs:
       - name: Check code
         run: npm run check
 
+      - name: Import persistent macOS signing identity
+        if: github.event_name != 'pull_request'
+        uses: apple-actions/import-codesign-certs@v7
+        with:
+          p12-file-base64: ${{ secrets.APPLE_CERTIFICATE }}
+          p12-password: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+
+      - name: Verify updater signing secrets are available
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: |
+          test -n "$TAURI_SIGNING_PRIVATE_KEY"
+          test -n "$TAURI_SIGNING_PRIVATE_KEY_PASSWORD"
+
       - name: Build Tauri bundles
-        run: npm run tauri build
+        if: ${{ !startsWith(github.ref, 'refs/tags/') }}
+        env:
+          APPLE_SIGNING_IDENTITY: ${{ github.event_name == 'pull_request' && '-' || 'mimi Local Development' }}
+        run: npm run tauri build -- --config '{"bundle":{"createUpdaterArtifacts":false}}'
+
+      - name: Build signed Tauri updater bundles
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          APPLE_SIGNING_IDENTITY: mimi Local Development
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          npm run tauri build
 
       - name: Verify macOS app bundle
         run: |
@@ -56,12 +85,19 @@ jobs:
           codesign --verify --deep --strict --verbose=2 "$app_path"
           executable="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$app_path/Contents/Info.plist")"
           file "$app_path/Contents/MacOS/$executable" | grep -F 'Mach-O 64-bit executable arm64'
+          if [[ "$GITHUB_EVENT_NAME" != "pull_request" ]]; then
+            codesign -dv --verbose=4 "$app_path" 2>&1 | grep -F 'Authority=mimi Local Development'
+          fi
 
       - name: Upload app bundles
+        if: github.event_name != 'pull_request'
         uses: actions/upload-artifact@v7
         with:
           name: tick-macos-bundles
-          path: src-tauri/target/release/bundle/dmg/*.dmg
+          path: |
+            src-tauri/target/release/bundle/dmg/*.dmg
+            src-tauri/target/release/bundle/macos/*.app.tar.gz
+            src-tauri/target/release/bundle/macos/*.app.tar.gz.sig
           if-no-files-found: error
 
   windows:
@@ -108,7 +144,19 @@ jobs:
         run: npm run check
 
       - name: Build privacy-preserving Windows installer
-        run: node scripts/build-windows.mjs --bundles nsis -- --locked
+        if: ${{ !startsWith(github.ref, 'refs/tags/') }}
+        run: node scripts/build-windows.mjs --bundles nsis --config '{"bundle":{"createUpdaterArtifacts":false}}' -- --locked
+
+      - name: Build signed Windows updater installer
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:TAURI_SIGNING_PRIVATE_KEY) -or [string]::IsNullOrWhiteSpace($env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD)) {
+            throw "Updater signing secrets are required for a release tag."
+          }
+          node scripts/build-windows.mjs --bundles nsis -- --locked
 
       - name: Verify executable, installer payload, and embedded paths
         shell: pwsh
@@ -118,6 +166,12 @@ jobs:
           $installers = @(Get-ChildItem 'src-tauri/target/release/bundle/nsis' -File -Filter '*-setup.exe')
           if ($installers.Count -ne 1) {
             throw "Expected exactly one NSIS installer, found $($installers.Count)."
+          }
+          if ($env:GITHUB_REF -like 'refs/tags/*') {
+            $signatures = @(Get-ChildItem 'src-tauri/target/release/bundle/nsis' -File -Filter "$($installers[0].Name).sig")
+            if ($signatures.Count -ne 1 -or $signatures[0].Length -eq 0) {
+              throw "Expected exactly one non-empty updater signature for $($installers[0].Name)."
+            }
           }
 
           $extractDir = Join-Path $env:RUNNER_TEMP 'tick-nsis-payload'
@@ -175,6 +229,7 @@ jobs:
           path: |
             src-tauri/target/release/Tick.exe
             src-tauri/target/release/bundle/nsis/*-setup.exe
+            src-tauri/target/release/bundle/nsis/*-setup.exe.sig
             src-tauri/target/release/bundle/nsis/SHA256SUMS.txt
           if-no-files-found: error
           retention-days: 7
@@ -190,6 +245,9 @@ jobs:
       contents: write
 
     steps:
+      - name: Checkout release source
+        uses: actions/checkout@v7
+
       - name: Download macOS bundle
         uses: actions/download-artifact@v8
         with:
@@ -214,17 +272,38 @@ jobs:
           set -euo pipefail
           version="${GITHUB_REF_NAME#v}"
           mapfile -t dmgs < <(find release-input/macos -type f -name "Tick_${version}_aarch64.dmg" -print)
+          mapfile -t mac_updaters < <(find release-input/macos -type f -name "*.app.tar.gz" -print)
+          mapfile -t mac_signatures < <(find release-input/macos -type f -name "*.app.tar.gz.sig" -print)
           mapfile -t x64_installers < <(find release-input/windows-x64 -type f -name "Tick_${version}_x64-setup.exe" -print)
+          mapfile -t x64_signatures < <(find release-input/windows-x64 -type f -name "Tick_${version}_x64-setup.exe.sig" -print)
           mapfile -t arm64_installers < <(find release-input/windows-arm64 -type f -name "Tick_${version}_arm64-setup.exe" -print)
+          mapfile -t arm64_signatures < <(find release-input/windows-arm64 -type f -name "Tick_${version}_arm64-setup.exe.sig" -print)
           test "${#dmgs[@]}" -eq 1
+          test "${#mac_updaters[@]}" -eq 1
+          test "${#mac_signatures[@]}" -eq 1
           test "${#x64_installers[@]}" -eq 1
+          test "${#x64_signatures[@]}" -eq 1
           test "${#arm64_installers[@]}" -eq 1
+          test "${#arm64_signatures[@]}" -eq 1
 
           mkdir -p release-assets
-          for file in "${dmgs[0]}" "${x64_installers[0]}" "${arm64_installers[0]}"; do
+          for file in \
+            "${dmgs[0]}" \
+            "${mac_updaters[0]}" \
+            "${mac_signatures[0]}" \
+            "${x64_installers[0]}" \
+            "${x64_signatures[0]}" \
+            "${arm64_installers[0]}" \
+            "${arm64_signatures[0]}"; do
             filename="$(basename "$file")"
             cp "$file" "release-assets/$filename"
           done
+
+          node scripts/updater-release.mjs build \
+            --version "$version" \
+            --asset-dir release-assets \
+            --notes-file "docs/release-notes/v${version}.md" \
+            --pub-date "$(git show -s --format=%cI "$GITHUB_SHA")"
           (
             cd release-assets
             sha256sum -- * | LC_ALL=C sort -k2 > SHA256SUMS.txt
@@ -246,6 +325,7 @@ jobs:
         with:
           name: Tick ${{ github.ref_name }}
           tag_name: ${{ github.ref_name }}
+          body_path: docs/release-notes/${{ github.ref_name }}.md
           generate_release_notes: true
           draft: true
           prerelease: false

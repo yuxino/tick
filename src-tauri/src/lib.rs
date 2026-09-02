@@ -26,6 +26,9 @@ fn show_window<R: Runtime>(window: &WebviewWindow<R>) {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let app = tauri::Builder::default()
+        .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_process::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .setup(|app| {
             let show = MenuItemBuilder::with_id("show", "显示窗口").build(app)?;
             let quit = MenuItemBuilder::with_id("quit", "退出").build(app)?;

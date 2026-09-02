@@ -20,7 +20,7 @@
   },
   "bundle": {
     "macOS": {
-      "signingIdentity": "-"
+      "signingIdentity": "mimi Local Development"
     }
   }
 }
