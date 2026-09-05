@@ -9,7 +9,15 @@
   </p>
 </div>
 
-![Tick 主界面](docs/images/tick-overview.png)
+<!-- project-demo-v1 -->
+## 演示
+
+[![tick — 演示](docs/demos/preview.gif)](docs/demos/demo.mp4)
+
+[完整视频（MP4）](docs/demos/demo.mp4) · [演示说明](docs/demos/README.md)
+
+手动配置任务、循环间隔与 Node.js 脚本。 真实前端录制，使用示例数据。只演示配置，不保存或运行系统任务。
+<!-- /project-demo-v1 -->
 
 ## 能做什么
 

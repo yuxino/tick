@@ -1,0 +1,50 @@
+{
+  "project": "tick",
+  "source_commit": "cfd84896f682d80967f7791b1221f1097dd06ad8",
+  "capture": "Unmodified production frontend in Chrome, documentation-only native-boundary fixtures",
+  "limitations": "Task configuration UI · no task saved or executed",
+  "steps": [
+    {
+      "zh": "手动填写一个定时任务。",
+      "en": "Start with a manually configured task."
+    },
+    {
+      "zh": "设成每小时一次，时间一眼就明白。",
+      "en": "Choose an hourly interval."
+    },
+    {
+      "zh": "填入一小段脚本，保存前仍可检查。",
+      "en": "Review the script before saving. Nothing runs here."
+    },
+    {
+      "zh": "演示到这里，不创建系统任务。",
+      "en": "Cancel the example without creating a system task."
+    }
+  ],
+  "browser": "152.0.7977.64",
+  "duration": 35.64,
+  "sha256": "3d9a3f894a3ff33d1dc773aba032d4b706ad3fa94c345f4dfcf043d80dac2310",
+  "recording_tool_sha256": "4167ddf8ad21f68b88e09fccfe56ce753ba4275b9c129b4cc3e2c5c7bbbee1f0",
+  "fixture_sha256": {
+    "page-1.png": "4d3c3aa80d2b0cd34bb8bcb6082273a10359d4fa6db1fbda0c891b9d9ab99518",
+    "page-2.png": "39aa63b25ac99652921004658f87bfc960cd6e13f0873a2141549879b85a72a5",
+    "page-3.png": "c0a63e7280fdcde7a64e7ea24b645853851a863c01d3af40db8780b8250c75d1",
+    "sample.pdf": "3780d846aa7ca61b185d52fa78ecc9b8d9d82555c7a7a77e4b7eefc45bf66444",
+    "source.png": "97d3fefc662fe60947efd6e9870b16164f2fb72fb6aac8883a552c8f0bb41572"
+  },
+  "media": {
+    "demo.mp4": {
+      "bytes": 514151,
+      "sha256": "3d9a3f894a3ff33d1dc773aba032d4b706ad3fa94c345f4dfcf043d80dac2310"
+    },
+    "poster.png": {
+      "bytes": 69136,
+      "sha256": "79bec7e6807f4b1dcb3b7162dfdabbf5f9f7af7ab59d8239673ce1d2ae0c7187"
+    },
+    "preview.gif": {
+      "bytes": 1715491,
+      "sha256": "9638faba39fb1b12b9795efea63a64b0aed1ac0c1bbf87d917a46f6b9b4dc0c3"
+    }
+  },
+  "disclosure": "Real frontend interaction recording with synthetic local data and mocked native boundaries. Not native end-to-end validation. No personal data, external content, provider requests, audio capture or task execution."
+}
