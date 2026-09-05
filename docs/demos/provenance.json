@@ -1,61 +1,128 @@
 {
   "project": "tick",
   "source_commit": "cfd84896f682d80967f7791b1221f1097dd06ad8",
-  "capture": "Unmodified production frontend in Chrome, documentation-only native-boundary fixtures",
+  "capture": "Unmodified production frontend in Chrome with isolated local sample data and mocked native APIs",
   "limitations": "Task configuration UI · no task saved or executed",
-  "steps": [
+  "browser": "152.0.7977.64",
+  "speed_factor": 10,
+  "result_hold_seconds": 0.8,
+  "duration": 20.833333,
+  "source_duration": 128.54579999999999,
+  "sha256": "d717070547118f1abe65a3903dfbfd7b05ac749a9dfb1a575db7f36be63cb337",
+  "scenes": [
     {
-      "zh": "手动填写一个定时任务。",
-      "en": "Start with a manually configured task."
+      "zh": "创建任务，先写清要做什么",
+      "en": "01 / Name the task and add a note",
+      "start": 4.3643999999999945,
+      "end": 24.31970000000001,
+      "poster": "01.png"
     },
     {
-      "zh": "设成每小时一次，时间一眼就明白。",
-      "en": "Choose an hourly interval."
+      "zh": "每天九点，快速选择时间",
+      "en": "02 / Daily schedule preset",
+      "start": 24.31970000000001,
+      "end": 31.864899999999995,
+      "poster": "02.png"
     },
     {
-      "zh": "填入一小段脚本，保存前仍可检查。",
-      "en": "Review the script before saving. Nothing runs here."
+      "zh": "每月执行，也可以直接配置",
+      "en": "03 / Monthly schedule",
+      "start": 31.864899999999995,
+      "end": 43.398,
+      "poster": "03.png"
     },
     {
-      "zh": "演示到这里，不创建系统任务。",
-      "en": "Cancel the example without creating a system task."
+      "zh": "一年一次的事，也不用记在脑子里",
+      "en": "04 / Yearly schedule",
+      "start": 43.398,
+      "end": 51.084399999999995,
+      "poster": "04.png"
+    },
+    {
+      "zh": "换成每十五分钟循环",
+      "en": "05 / Recurring interval presets",
+      "start": 51.084399999999995,
+      "end": 61.25789999999999,
+      "poster": "05.png"
+    },
+    {
+      "zh": "直接写 Node.js 脚本",
+      "en": "06 / Inline script editor",
+      "start": 61.25789999999999,
+      "end": 79.979,
+      "poster": "06.png"
+    },
+    {
+      "zh": "已有脚本，也可以直接填写路径",
+      "en": "07 / Use an existing script file",
+      "start": 79.979,
+      "end": 94.0419,
+      "poster": "07.png"
+    },
+    {
+      "zh": "需要时，再展开参数与工作目录",
+      "en": "08 / Advanced execution options",
+      "start": 94.0419,
+      "end": 110.85369999999999,
+      "poster": "08.png"
+    },
+    {
+      "zh": "给脚本配置自己的环境变量",
+      "en": "09 / Configure non-secret example variables",
+      "start": 110.85369999999999,
+      "end": 126.1851,
+      "poster": "09.png"
+    },
+    {
+      "zh": "日程视图，集中查看安排",
+      "en": "10 / Calendar view; no system task was created",
+      "start": 126.1851,
+      "end": 132.91019999999997,
+      "poster": "10.png"
     }
   ],
-  "browser": "152.0.7977.64",
-  "duration": 17.84,
-  "sha256": "3f0628668175e13df7c7479733bb8033c22ee889a55e42cedd7377a7e1d0c8a5",
-  "recording_tool_sha256": "4167ddf8ad21f68b88e09fccfe56ce753ba4275b9c129b4cc3e2c5c7bbbee1f0",
-  "fixture_sha256": {
-    "page-1.png": "4d3c3aa80d2b0cd34bb8bcb6082273a10359d4fa6db1fbda0c891b9d9ab99518",
-    "page-2.png": "39aa63b25ac99652921004658f87bfc960cd6e13f0873a2141549879b85a72a5",
-    "page-3.png": "c0a63e7280fdcde7a64e7ea24b645853851a863c01d3af40db8780b8250c75d1",
-    "sample.pdf": "3780d846aa7ca61b185d52fa78ecc9b8d9d82555c7a7a77e4b7eefc45bf66444",
-    "source.png": "97d3fefc662fe60947efd6e9870b16164f2fb72fb6aac8883a552c8f0bb41572"
-  },
+  "actions": [
+    "手动填写",
+    "",
+    "Type: 每日笔记整理",
+    "",
+    "Type: 演示配置，不执行任务",
+    "09:00",
+    "每月某日",
+    "每年某天",
+    "循环间隔",
+    "15 分钟",
+    "1 小时",
+    "console.log(\"tick\", new Date().toLocaleString());",
+    "Edit inline script",
+    "运行 .js 文件",
+    "",
+    "Type: C:\\Scripts\\notes.js",
+    "高级设置",
+    "",
+    "Type: --mode preview",
+    "添加变量",
+    "",
+    "Type: DEMO_MODE",
+    "",
+    "Type: preview",
+    "取 消",
+    "日程"
+  ],
+  "disclosure": "New, expanded frontend interaction recording. Every action interval is retimed at 10x; each result receives a 0.8-second hold. Native API boundaries use original sample data. No live AI request, system capture, task execution or native filesystem acceptance is claimed.",
+  "recording_tool_sha256": "9a88822bb8cffe05bc0c48e805c9d0b843e9b7b8a5bb2e68c64d4e37c108005e",
   "media": {
     "demo.mp4": {
-      "bytes": 392449,
-      "sha256": "3f0628668175e13df7c7479733bb8033c22ee889a55e42cedd7377a7e1d0c8a5"
-    },
-    "poster.png": {
-      "bytes": 69136,
-      "sha256": "79bec7e6807f4b1dcb3b7162dfdabbf5f9f7af7ab59d8239673ce1d2ae0c7187"
+      "bytes": 506523,
+      "sha256": "d717070547118f1abe65a3903dfbfd7b05ac749a9dfb1a575db7f36be63cb337"
     },
     "preview.gif": {
-      "bytes": 1574827,
-      "sha256": "9f97a907f91fb75ff3358441b6887f054f0b231138f3e10faefb48b258cb1cea"
+      "bytes": 2174607,
+      "sha256": "604a56a67ab8025bf4853b67ae65ee5bab0c315f151bda66d609851e090815e6"
+    },
+    "poster.png": {
+      "bytes": 72131,
+      "sha256": "ef81fc98db50832f21f83f48aff3a59fa88a8798be1d9d2c379700bf4e7e668b"
     }
-  },
-  "disclosure": "Real frontend interaction recording with synthetic local data and mocked native boundaries. Not native end-to-end validation. No personal data, external content, provider requests, audio capture or task execution.",
-  "retiming": {
-    "speed": 2.0,
-    "source_duration": 35.64,
-    "source_video_sha256": "3d9a3f894a3ff33d1dc773aba032d4b706ad3fa94c345f4dfcf043d80dac2310",
-    "source_preview_sha256": "9638faba39fb1b12b9795efea63a64b0aed1ac0c1bbf87d917a46f6b9b4dc0c3",
-    "tool_sha256": "d761d3bdbb5c3903f6654e3d9bc109d8baf026cfe5b899199274e5e1e5cdfd9f",
-    "video_fps": 25,
-    "gif_fps": 10,
-    "method": "Uniform timestamp acceleration; no scene removal, cropping, new UI or audio.",
-    "disclosures_preserved": true
   }
 }
