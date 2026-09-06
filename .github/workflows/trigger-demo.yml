@@ -39,12 +39,18 @@ jobs:
           if ($proc.ExitCode -ne 0) { throw 'Installation failed' }
           $apps=@(Get-ChildItem $root -Recurse -Filter 'tick.exe')
           if ($apps.Count -ne 1) { throw 'Installed app not found' }
+          Get-Process tick -ErrorAction SilentlyContinue | Stop-Process -Force
+          Start-Sleep -Seconds 2
           $env:WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS='--remote-debugging-port=9222 --force-renderer-accessibility'
           $env:WEBVIEW2_USER_DATA_FOLDER=Join-Path $env:RUNNER_TEMP 'TickDemoWebView'
           $env:DEMO_NODE=(Get-Command node).Source
           Start-Process $apps[0].FullName
           python docs/demos/capture-native-trigger.py
-          if ($LASTEXITCODE -ne 0) { throw 'Capture failed' }
+          if ($LASTEXITCODE -ne 0) {
+            New-Item trigger-review -ItemType Directory -Force | Out-Null
+            Get-CimInstance Win32_Process | Where-Object { $_.Name -match 'tick|msedgewebview2' } | Select-Object Name,ProcessId,CommandLine | ConvertTo-Json -Depth 3 > trigger-review/processes.json
+            throw 'Capture failed'
+          }
       - uses: actions/upload-artifact@v7
         if: always()
         with:
