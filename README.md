@@ -12,11 +12,11 @@
 <!-- project-demo-v1 -->
 ## 演示
 
-[![Tick — 演示](docs/demos/preview.gif)](docs/demos/demo.mp4)
+[![Tick](docs/demos/preview.gif)](docs/demos/demo.mp4)
 
-[完整视频（MP4）](docs/demos/demo.mp4) · [演示说明](docs/demos/README.md)
+[观看视频](docs/demos/demo.mp4)
 
-配置时间和脚本，点「立即运行」触发提醒弹窗，再到实时日志确认结果。后半段为 **Windows 原生环境实录**；弹窗由示例脚本产生。
+设置任务、触发运行，再查看执行结果和日志。
 <!-- /project-demo-v1 -->
 
 ## 能做什么
