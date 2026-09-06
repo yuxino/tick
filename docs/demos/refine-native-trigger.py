@@ -1,5 +1,5 @@
 from pathlib import Path
-p=Path(__file__).with_name('inspect-native-ui.py');s=p.read_text()
+p=Path(__file__).with_name('inspect-native-ui.py');s=p.read_text(encoding='utf-8')
 changes={
  'win32clipboard.SetClipboardText(text)':'win32clipboard.SetClipboardText(text,13)',
  "control('高级设置','Button')":"control('.*高级设置','Button')",
@@ -10,4 +10,4 @@ changes={
 for old,new in changes.items():
  if s.count(old)!=1:raise SystemExit('Capture source changed; review correction')
  s=s.replace(old,new)
-compile(s,str(p),'exec');p.write_text(s)
+compile(s,str(p),'exec');p.write_text(s,encoding='utf-8')
