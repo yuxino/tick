@@ -1,76 +1,65 @@
 {
-  "project": "tick",
-  "source_commit": "cfd84896f682d80967f7791b1221f1097dd06ad8",
-  "duration": 29.533333,
-  "sha256": "59cf4117294023528ff2302b8c554eed1c19f5364a52106a74ed61ec4a54b14c",
-  "previous_media_sha256": "d717070547118f1abe65a3903dfbfd7b05ac749a9dfb1a575db7f36be63cb337",
-  "native_source_commit": "2e0c45e4dce4c259826fa170716f6d425559ed62",
-  "native_recording_sha256": "cd5cf71b74c7b6b8f4a162b0d2666a09e2e0284f7b57d215e099c054283a655b",
-  "capture_run": 34007989748,
-  "capture_artifact": 9981574158,
-  "native_execution_verified": true,
-  "segments": [
+  "native": true,
+  "success": true,
+  "source_commit": "2e0c45e4dce4c259826fa170716f6d425559ed62",
+  "scenes": [
     {
-      "kind": "existing_configuration_tour",
-      "native": false,
-      "seconds": 20.833333,
-      "action_speed": 10,
-      "result_hold": 0.8
-    },
-    {
-      "kind": "native_task_run",
       "caption": "配置一个真实的提醒脚本",
-      "raw_start": 0.0,
-      "raw_end": 14.95,
-      "action_speed": 10,
-      "result_hold": 0.8,
-      "seconds": 2.3
+      "time": 14.28200000000001
     },
     {
-      "kind": "native_task_run",
       "caption": "任务已保存，准备立即运行",
-      "raw_start": 14.95,
-      "raw_end": 18.731000000000005,
-      "action_speed": 10,
-      "result_hold": 0.8,
-      "seconds": 1.166667
+      "time": 25.843999999999994
     },
     {
-      "kind": "native_task_run",
       "caption": "系统任务已触发，原生提醒弹窗出现",
-      "raw_start": 18.731000000000005,
-      "raw_end": 24.185000000000013,
-      "action_speed": 10,
-      "result_hold": 2.0,
-      "seconds": 2.533333
+      "time": 36.968999999999994
     },
     {
-      "kind": "native_task_run",
       "caption": "完成后，在实时日志里确认结果",
-      "raw_start": 24.185000000000013,
-      "raw_end": 31.2,
-      "action_speed": 10,
-      "result_hold": 2.0,
-      "seconds": 2.7
+      "time": 51.26600000000002
     }
   ],
-  "disclosure": "The first segment retains the original frontend-only configuration tour. The closing segment is an actual installed Windows app task save, manual Run now, real reminder dialog and real completion stdout. Popup comes from the sample script, not a built-in reminder feature. Actions are edited to 10x with result holds; not a scheduler-latency benchmark or proof of time-based activation on every supported OS.",
+  "dimensions": [
+    1920,
+    1080
+  ],
+  "task_saved": true,
+  "trigger_clicked": true,
+  "popup_visible": true,
+  "popup_foreground": true,
+  "popup_observed": true,
+  "completion_stdout_verified": true,
+  "log": "Tick demo: task started\nTick demo: popup dismissed; task completed\n",
+  "single_take": true,
+  "scene_cuts": 0,
+  "added_holds": 0,
+  "speed_factor": 10,
+  "task_cleanup_returncode": 0,
+  "sha256": "d06205b12f732f1da75b281bb0829f316d637d638f878f2077960f1d11d9976f",
+  "project": "tick",
+  "capture_run": 34011579006,
+  "capture_artifact": 9982642963,
+  "duration": 6.033333,
+  "previous_media_sha256": "59cf4117294023528ff2302b8c554eed1c19f5364a52106a74ed61ec4a54b14c",
+  "preview_dimensions": [
+    1440,
+    810
+  ],
+  "preview_fps": 12,
+  "disclosure": "Installed Windows app, manual Run now through the scheduler, reminder dialog created by the original example script, and real completion logs. No calendar-based trigger was awaited.",
   "media": {
     "demo.mp4": {
-      "bytes": 694324,
-      "sha256": "59cf4117294023528ff2302b8c554eed1c19f5364a52106a74ed61ec4a54b14c"
+      "bytes": 193279,
+      "sha256": "d06205b12f732f1da75b281bb0829f316d637d638f878f2077960f1d11d9976f"
     },
     "preview.gif": {
-      "bytes": 1575780,
-      "sha256": "4e703d1750c49b073232ffc2907c154e030ae48e5ba8c7a1f72fe9508b349368"
+      "bytes": 639057,
+      "sha256": "ec13d337c76a23f4f234cc877999acc2fa01f8d9e78059f409202154a8110e0d"
     },
     "poster.png": {
-      "bytes": 105100,
-      "sha256": "a07957644ede8d002e6d5e739bfe27d457ea0d420e934a6f5db39519911cf08c"
-    },
-    "native-verification.json": {
-      "bytes": 1264,
-      "sha256": "240ad49574ce179c39c2f5b418937d93917b75906193d1bc67fa540927894e44"
+      "bytes": 94018,
+      "sha256": "6e2d6a9ad99fb95fe415faf954b4ccb0f53335061bd22644bd8a3d8b8eed749f"
     }
   }
 }
