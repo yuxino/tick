@@ -12,6 +12,9 @@ jobs:
     timeout-minutes: 6
     steps:
       - uses: actions/checkout@v7
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
       - uses: actions/download-artifact@v7
         with:
           github-token: ${{ github.token }}
@@ -21,11 +24,12 @@ jobs:
       - name: Assemble and verify the reviewed recording
         run: |
           sudo apt-get install -y ffmpeg fonts-noto-cjk
-          python3 -m pip install Pillow==11.3.0
-          python3 -I docs/demos/package-native.py
+          python -m venv "$RUNNER_TEMP/demo-venv"
+          "$RUNNER_TEMP/demo-venv/bin/python" -m pip install Pillow==11.3.0
+          "$RUNNER_TEMP/demo-venv/bin/python" -I docs/demos/package-native.py
       - name: Update only project documentation and remove completed capture scaffolding
         run: |
-          python3 - <<'PY'
+          python - <<'PY'
           import json,re,shutil,subprocess
           from pathlib import Path
           assert subprocess.check_output(['git','branch','--show-current'],text=True).strip()=='docs/trigger-demo-v1'
