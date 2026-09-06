@@ -3,7 +3,7 @@ p=Path(__file__).with_name('inspect-native-ui.py');s=p.read_text(encoding='utf-8
 changes={
  'win32clipboard.SetClipboardText(text)':'win32clipboard.SetClipboardText(text,13)',
  "control('高级设置','Button')":"control('.*高级设置','Button')",
- "control('立即运行','Button')":"control('.*立即运行','Button')",
+ "control('立即运行','Button')":"control('^play-circle 立即运行$','Button')",
  "taskname=job.get('label','')":"taskname=job.get('definitionPath','')",
  "if taskname.startswith('Tick.') or taskname.startswith('com.'):":"if taskname == '\\\\Tick.'+job['id']:",
  "w.child_window(auto_id='execution_interpreter',control_type='Edit')":"w.child_window(auto_id='execution_interpreter',control_type='Edit',visible_only=False)",
