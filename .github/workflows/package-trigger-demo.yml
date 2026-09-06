@@ -27,6 +27,12 @@ jobs:
           python -m venv "$RUNNER_TEMP/demo-venv"
           "$RUNNER_TEMP/demo-venv/bin/python" -m pip install Pillow==11.3.0
           "$RUNNER_TEMP/demo-venv/bin/python" -I docs/demos/package-native.py
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('native-deliverables/docs/demos/capture/record-native.py')
+          p.write_text(p.read_text(encoding='utf-8'),encoding='utf-8',newline='\n')
+          compile(p.read_text(encoding='utf-8'),str(p),'exec')
+          PY
       - name: Update only project documentation and remove completed capture scaffolding
         run: |
           python - <<'PY'
