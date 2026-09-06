@@ -2,10 +2,13 @@ name: Native task trigger demo
 on:
   push:
     branches: [docs/trigger-demo-v1]
-    paths: [.github/workflows/trigger-demo.yml, docs/demos/inspect-native-ui.py]
+    paths: [.github/workflows/trigger-demo.yml, docs/demos/inspect-native-ui.py, docs/demos/refine-native-trigger.py]
 permissions:
   contents: read
   actions: read
+concurrency:
+  group: native-trigger-demo
+  cancel-in-progress: true
 jobs:
   capture:
     runs-on: windows-2025
@@ -24,7 +27,7 @@ jobs:
           run-id: 33993205520
           name: tick-windows-x64
           path: app-artifact
-      - name: Install and inspect native accessibility controls
+      - name: Install and operate the real application
         shell: pwsh
         run: |
           $ErrorActionPreference='Stop'
@@ -38,8 +41,11 @@ jobs:
           $apps=@(Get-ChildItem $root -Recurse -Filter 'tick.exe')
           $env:DEMO_NODE=(Get-Command node).Source
           Start-Process $apps[0].FullName
+          python docs/demos/refine-native-trigger.py
+          if ($LASTEXITCODE -ne 0) { throw 'Capture preparation failed' }
           python docs/demos/inspect-native-ui.py
           if ($LASTEXITCODE -ne 0) { throw 'Native capture failed' }
+          Copy-Item docs/demos/inspect-native-ui.py trigger-review/capture-native.py
       - uses: actions/upload-artifact@v7
         if: always()
         with:
