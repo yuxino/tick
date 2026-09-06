@@ -1,0 +1,54 @@
+name: Native task trigger demo
+on:
+  push:
+    branches: [docs/trigger-demo-v1]
+    paths: [.github/workflows/trigger-demo.yml, docs/demos/capture-native-trigger.py]
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: native-trigger-demo
+  cancel-in-progress: true
+jobs:
+  capture:
+    runs-on: windows-2025
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+      - uses: actions/download-artifact@v7
+        with:
+          github-token: ${{ github.token }}
+          run-id: 33993205520
+          name: tick-windows-x64
+          path: app-artifact
+      - name: Install capture tooling and the actual app
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          python -m pip install playwright==1.55.0 Pillow==11.3.0 imageio-ffmpeg==0.6.0
+          $installers=@(Get-ChildItem app-artifact -Recurse -Filter '*setup.exe')
+          if ($installers.Count -ne 1) { throw "Expected one installer, got $($installers.Count)" }
+          $root=Join-Path $env:RUNNER_TEMP 'TickDemo'
+          $proc=Start-Process $installers[0].FullName -ArgumentList @('/S',"/D=$root") -PassThru -Wait
+          if ($proc.ExitCode -ne 0) { throw 'Installation failed' }
+          $apps=@(Get-ChildItem $root -Recurse -Filter 'tick.exe')
+          if ($apps.Count -ne 1) { throw 'Installed app not found' }
+          $env:WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS='--remote-debugging-port=9222 --force-renderer-accessibility'
+          $env:WEBVIEW2_USER_DATA_FOLDER=Join-Path $env:RUNNER_TEMP 'TickDemoWebView'
+          $env:DEMO_NODE=(Get-Command node).Source
+          Start-Process $apps[0].FullName
+          python docs/demos/capture-native-trigger.py
+          if ($LASTEXITCODE -ne 0) { throw 'Capture failed' }
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: tick-native-trigger-review
+          path: trigger-review/
+          retention-days: 5
+          if-no-files-found: error
