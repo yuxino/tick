@@ -2,13 +2,10 @@ name: Native task trigger demo
 on:
   push:
     branches: [docs/trigger-demo-v1]
-    paths: [.github/workflows/trigger-demo.yml, docs/demos/capture-native-trigger.py]
+    paths: [.github/workflows/trigger-demo.yml, docs/demos/inspect-native-ui.py]
 permissions:
   contents: read
   actions: read
-concurrency:
-  group: native-trigger-demo
-  cancel-in-progress: true
 jobs:
   capture:
     runs-on: windows-2025
@@ -27,30 +24,22 @@ jobs:
           run-id: 33993205520
           name: tick-windows-x64
           path: app-artifact
-      - name: Install capture tooling and the actual app
+      - name: Install and inspect native accessibility controls
         shell: pwsh
         run: |
           $ErrorActionPreference='Stop'
-          python -m pip install playwright==1.55.0 Pillow==11.3.0 imageio-ffmpeg==0.6.0
+          python -m pip install pywinauto==0.6.9 Pillow==11.3.0 imageio-ffmpeg==0.6.0
           $installers=@(Get-ChildItem app-artifact -Recurse -Filter '*setup.exe')
-          if ($installers.Count -ne 1) { throw "Expected one installer, got $($installers.Count)" }
+          if ($installers.Count -ne 1) { throw 'Expected one installer' }
           $root=Join-Path $env:RUNNER_TEMP 'TickDemo'
           $proc=Start-Process $installers[0].FullName -ArgumentList @('/S',"/D=$root") -PassThru -Wait
           if ($proc.ExitCode -ne 0) { throw 'Installation failed' }
-          $apps=@(Get-ChildItem $root -Recurse -Filter 'tick.exe')
-          if ($apps.Count -ne 1) { throw 'Installed app not found' }
           Get-Process tick -ErrorAction SilentlyContinue | Stop-Process -Force
-          Start-Sleep -Seconds 2
-          $env:WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS='--remote-debugging-port=9222 --force-renderer-accessibility'
-          $env:WEBVIEW2_USER_DATA_FOLDER=Join-Path $env:RUNNER_TEMP 'TickDemoWebView'
+          $apps=@(Get-ChildItem $root -Recurse -Filter 'tick.exe')
           $env:DEMO_NODE=(Get-Command node).Source
           Start-Process $apps[0].FullName
-          python docs/demos/capture-native-trigger.py
-          if ($LASTEXITCODE -ne 0) {
-            New-Item trigger-review -ItemType Directory -Force | Out-Null
-            Get-CimInstance Win32_Process | Where-Object { $_.Name -match 'tick|msedgewebview2' } | Select-Object Name,ProcessId,CommandLine | ConvertTo-Json -Depth 3 > trigger-review/processes.json
-            throw 'Capture failed'
-          }
+          python docs/demos/inspect-native-ui.py
+          if ($LASTEXITCODE -ne 0) { throw 'Native capture failed' }
       - uses: actions/upload-artifact@v7
         if: always()
         with:
