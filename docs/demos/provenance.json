@@ -1,128 +1,76 @@
 {
   "project": "tick",
   "source_commit": "cfd84896f682d80967f7791b1221f1097dd06ad8",
-  "capture": "Unmodified production frontend in Chrome with isolated local sample data and mocked native APIs",
-  "limitations": "Task configuration UI · no task saved or executed",
-  "browser": "152.0.7977.64",
-  "speed_factor": 10,
-  "result_hold_seconds": 0.8,
-  "duration": 20.833333,
-  "source_duration": 128.54579999999999,
-  "sha256": "d717070547118f1abe65a3903dfbfd7b05ac749a9dfb1a575db7f36be63cb337",
-  "scenes": [
+  "duration": 29.533333,
+  "sha256": "59cf4117294023528ff2302b8c554eed1c19f5364a52106a74ed61ec4a54b14c",
+  "previous_media_sha256": "d717070547118f1abe65a3903dfbfd7b05ac749a9dfb1a575db7f36be63cb337",
+  "native_source_commit": "2e0c45e4dce4c259826fa170716f6d425559ed62",
+  "native_recording_sha256": "cd5cf71b74c7b6b8f4a162b0d2666a09e2e0284f7b57d215e099c054283a655b",
+  "capture_run": 34007989748,
+  "capture_artifact": 9981574158,
+  "native_execution_verified": true,
+  "segments": [
     {
-      "zh": "创建任务，先写清要做什么",
-      "en": "01 / Name the task and add a note",
-      "start": 4.3643999999999945,
-      "end": 24.31970000000001,
-      "poster": "01.png"
+      "kind": "existing_configuration_tour",
+      "native": false,
+      "seconds": 20.833333,
+      "action_speed": 10,
+      "result_hold": 0.8
     },
     {
-      "zh": "每天九点，快速选择时间",
-      "en": "02 / Daily schedule preset",
-      "start": 24.31970000000001,
-      "end": 31.864899999999995,
-      "poster": "02.png"
+      "kind": "native_task_run",
+      "caption": "配置一个真实的提醒脚本",
+      "raw_start": 0.0,
+      "raw_end": 14.95,
+      "action_speed": 10,
+      "result_hold": 0.8,
+      "seconds": 2.3
     },
     {
-      "zh": "每月执行，也可以直接配置",
-      "en": "03 / Monthly schedule",
-      "start": 31.864899999999995,
-      "end": 43.398,
-      "poster": "03.png"
+      "kind": "native_task_run",
+      "caption": "任务已保存，准备立即运行",
+      "raw_start": 14.95,
+      "raw_end": 18.731000000000005,
+      "action_speed": 10,
+      "result_hold": 0.8,
+      "seconds": 1.166667
     },
     {
-      "zh": "一年一次的事，也不用记在脑子里",
-      "en": "04 / Yearly schedule",
-      "start": 43.398,
-      "end": 51.084399999999995,
-      "poster": "04.png"
+      "kind": "native_task_run",
+      "caption": "系统任务已触发，原生提醒弹窗出现",
+      "raw_start": 18.731000000000005,
+      "raw_end": 24.185000000000013,
+      "action_speed": 10,
+      "result_hold": 2.0,
+      "seconds": 2.533333
     },
     {
-      "zh": "换成每十五分钟循环",
-      "en": "05 / Recurring interval presets",
-      "start": 51.084399999999995,
-      "end": 61.25789999999999,
-      "poster": "05.png"
-    },
-    {
-      "zh": "直接写 Node.js 脚本",
-      "en": "06 / Inline script editor",
-      "start": 61.25789999999999,
-      "end": 79.979,
-      "poster": "06.png"
-    },
-    {
-      "zh": "已有脚本，也可以直接填写路径",
-      "en": "07 / Use an existing script file",
-      "start": 79.979,
-      "end": 94.0419,
-      "poster": "07.png"
-    },
-    {
-      "zh": "需要时，再展开参数与工作目录",
-      "en": "08 / Advanced execution options",
-      "start": 94.0419,
-      "end": 110.85369999999999,
-      "poster": "08.png"
-    },
-    {
-      "zh": "给脚本配置自己的环境变量",
-      "en": "09 / Configure non-secret example variables",
-      "start": 110.85369999999999,
-      "end": 126.1851,
-      "poster": "09.png"
-    },
-    {
-      "zh": "日程视图，集中查看安排",
-      "en": "10 / Calendar view; no system task was created",
-      "start": 126.1851,
-      "end": 132.91019999999997,
-      "poster": "10.png"
+      "kind": "native_task_run",
+      "caption": "完成后，在实时日志里确认结果",
+      "raw_start": 24.185000000000013,
+      "raw_end": 31.2,
+      "action_speed": 10,
+      "result_hold": 2.0,
+      "seconds": 2.7
     }
   ],
-  "actions": [
-    "手动填写",
-    "",
-    "Type: 每日笔记整理",
-    "",
-    "Type: 演示配置，不执行任务",
-    "09:00",
-    "每月某日",
-    "每年某天",
-    "循环间隔",
-    "15 分钟",
-    "1 小时",
-    "console.log(\"tick\", new Date().toLocaleString());",
-    "Edit inline script",
-    "运行 .js 文件",
-    "",
-    "Type: C:\\Scripts\\notes.js",
-    "高级设置",
-    "",
-    "Type: --mode preview",
-    "添加变量",
-    "",
-    "Type: DEMO_MODE",
-    "",
-    "Type: preview",
-    "取 消",
-    "日程"
-  ],
-  "disclosure": "New, expanded frontend interaction recording. Every action interval is retimed at 10x; each result receives a 0.8-second hold. Native API boundaries use original sample data. No live AI request, system capture, task execution or native filesystem acceptance is claimed.",
-  "recording_tool_sha256": "9a88822bb8cffe05bc0c48e805c9d0b843e9b7b8a5bb2e68c64d4e37c108005e",
+  "disclosure": "The first segment retains the original frontend-only configuration tour. The closing segment is an actual installed Windows app task save, manual Run now, real reminder dialog and real completion stdout. Popup comes from the sample script, not a built-in reminder feature. Actions are edited to 10x with result holds; not a scheduler-latency benchmark or proof of time-based activation on every supported OS.",
   "media": {
     "demo.mp4": {
-      "bytes": 506523,
-      "sha256": "d717070547118f1abe65a3903dfbfd7b05ac749a9dfb1a575db7f36be63cb337"
+      "bytes": 694324,
+      "sha256": "59cf4117294023528ff2302b8c554eed1c19f5364a52106a74ed61ec4a54b14c"
     },
     "preview.gif": {
-      "bytes": 2174607,
-      "sha256": "604a56a67ab8025bf4853b67ae65ee5bab0c315f151bda66d609851e090815e6"
+      "bytes": 1575780,
+      "sha256": "4e703d1750c49b073232ffc2907c154e030ae48e5ba8c7a1f72fe9508b349368"
     },
     "poster.png": {
-      "bytes": 72131,
-      "sha256": "ef81fc98db50832f21f83f48aff3a59fa88a8798be1d9d2c379700bf4e7e668b"
+      "bytes": 105100,
+      "sha256": "a07957644ede8d002e6d5e739bfe27d457ea0d420e934a6f5db39519911cf08c"
+    },
+    "native-verification.json": {
+      "bytes": 1264,
+      "sha256": "240ad49574ce179c39c2f5b418937d93917b75906193d1bc67fa540927894e44"
     }
   }
 }

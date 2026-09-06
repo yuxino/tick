@@ -1,0 +1,40 @@
+{
+  "native": true,
+  "success": true,
+  "source_commit": "2e0c45e4dce4c259826fa170716f6d425559ed62",
+  "scenes": [
+    {
+      "caption": "配置一个真实的提醒脚本",
+      "time": 14.5
+    },
+    {
+      "caption": "任务已保存，准备立即运行",
+      "time": 18.281000000000006
+    },
+    {
+      "caption": "系统任务已触发，原生提醒弹窗出现",
+      "time": 23.735000000000014
+    },
+    {
+      "caption": "完成后，在实时日志里确认结果",
+      "time": 30.219000000000023
+    }
+  ],
+  "dimensions": [
+    1024,
+    768
+  ],
+  "task_saved": true,
+  "trigger_clicked": true,
+  "popup_visible": true,
+  "popup_foreground": true,
+  "popup_observed": true,
+  "completion_stdout_verified": true,
+  "log": "Tick demo: task started\nTick demo: popup dismissed; task completed\n",
+  "task_cleanup_returncode": 0,
+  "capture_run": 34007989748,
+  "capture_artifact": 9981574158,
+  "environment": "Disposable GitHub-hosted Windows Server 2025 desktop; installed unmodified Tick x64 build",
+  "trigger": "Manual Run now, routed through the actual Windows task scheduler",
+  "dialog": "Created by the original example script. The recorder focused that existing real dialog before taking the poster; no fake dialog was drawn."
+}

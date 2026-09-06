@@ -12,11 +12,11 @@
 <!-- project-demo-v1 -->
 ## 演示
 
-[![tick — 演示](docs/demos/preview.gif)](docs/demos/demo.mp4)
+[![Tick — 演示](docs/demos/preview.gif)](docs/demos/demo.mp4)
 
 [完整视频（MP4）](docs/demos/demo.mp4) · [演示说明](docs/demos/README.md)
 
-每天／每月／每年／循环计划、脚本编辑、文件路径、高级参数、示例变量与日程。 **10× 操作快放，结果停留 0.8 秒。** 真实前端录制，使用示例数据。只演示配置，不保存或执行系统任务。
+配置时间和脚本，点「立即运行」触发提醒弹窗，再到实时日志确认结果。后半段为 **Windows 原生环境实录**；弹窗由示例脚本产生。
 <!-- /project-demo-v1 -->
 
 ## 能做什么

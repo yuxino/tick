@@ -27,7 +27,7 @@ def record():
    writer.send(ImageGrab.grab().convert('RGB').crop((0,0,width,height)).tobytes());n+=1;time.sleep(max(0,t+n/10-time.monotonic()))
  finally:writer.close()
 def paste(c,text):
- c.click_input();keyboard.send_keys('^a');win32clipboard.OpenClipboard();win32clipboard.EmptyClipboard();win32clipboard.SetClipboardText(text);win32clipboard.CloseClipboard();keyboard.send_keys('^v');time.sleep(.5)
+ c.click_input();keyboard.send_keys('^a');win32clipboard.OpenClipboard();win32clipboard.EmptyClipboard();win32clipboard.SetClipboardText(text,13);win32clipboard.CloseClipboard();keyboard.send_keys('^v');time.sleep(.5)
 def control(title,ctype=None):
  opts={'title_re':title}
  if ctype:opts['control_type']=ctype
@@ -56,10 +56,10 @@ try:
  paste(w.child_window(auto_id='description',control_type='Edit'),'真实执行一次，弹出提醒，再查看日志。')
  control('运行 \\.js 文件','Text').click_input();time.sleep(.6)
  path=w.child_window(auto_id='execution_scriptPath',control_type='Edit');ensure_visible(path);paste(path,str(script))
- advanced=control('高级设置','Button')
+ advanced=control('.*高级设置','Button')
  if not advanced.exists():advanced=control('高级设置','Text')
- ensure_visible(advanced);advanced.click_input();time.sleep(.5)
- interpreter=w.child_window(auto_id='execution_interpreter',control_type='Edit');ensure_visible(interpreter);paste(interpreter,os.environ['DEMO_NODE'])
+ ensure_visible(advanced);advanced.click_input();time.sleep(1.2);mouse.scroll(coords=(910,550),wheel_dist=-4);time.sleep(.6)
+ interpreter=w.child_window(auto_id='execution_interpreter',control_type='Edit',visible_only=False);ensure_visible(interpreter);paste(interpreter,os.environ['DEMO_NODE'])
  mark('配置一个真实的提醒脚本')
  save=control('^保\\s*存$','Button');save.invoke()
  for _ in range(30):
@@ -67,14 +67,20 @@ try:
   if job:break
  if not job:raise RuntimeError('UI save did not produce a real task registry entry')
  report['task_id']=job['id'];report['task_saved']=True
- time.sleep(1);control(re.escape(NAME),'Text').click_input();time.sleep(.7);mark('任务已保存，准备立即运行')
- control('立即运行','Button').click_input();report['trigger_clicked']=True
+ time.sleep(1.7);mark('任务已保存，准备立即运行')
+ control('^play-circle 立即运行$','Button').click_input();report['trigger_clicked']=True
  popup=None
  for _ in range(80):
   h=ctypes.windll.user32.FindWindowW(None,'Tick demo completed')
   if h:popup=h;break
   time.sleep(.4)
  if not popup:raise RuntimeError('No actual task popup was observed')
+ popup_window=Desktop(backend='uia').window(handle=popup)
+ popup_window.wait('visible',timeout=8)
+ popup_window.set_focus();time.sleep(1)
+ report['popup_visible']=popup_window.is_visible()
+ report['popup_foreground']=ctypes.windll.user32.GetForegroundWindow()==popup
+ if not (report['popup_visible'] and report['popup_foreground']):raise RuntimeError('Real task popup was not visibly foregrounded')
  report['popup_observed']=True;mark('系统任务已触发，原生提醒弹窗出现');snap('poster')
  time.sleep(2);ctypes.windll.user32.PostMessageW(popup,0x0010,0,0)
  log_path=pathlib.Path(job['stdoutPath'])
@@ -94,8 +100,8 @@ finally:
  if thread:thread.join(timeout=15)
  if job:
   # Delete only this demo's owned task, never other user/system tasks.
-  taskname=job.get('label','')
-  if taskname.startswith('Tick.') or taskname.startswith('com.'):
+  taskname=job.get('definitionPath','')
+  if taskname == '\\Tick.'+job['id']:
    r=subprocess.run(['schtasks','/Delete','/TN',taskname,'/F'],capture_output=True,text=True);report['task_cleanup_returncode']=r.returncode
  win32clipboard.OpenClipboard();win32clipboard.EmptyClipboard();win32clipboard.CloseClipboard()
  (OUT/'report.json').write_text(json.dumps(report,ensure_ascii=False,indent=2),encoding='utf-8')
