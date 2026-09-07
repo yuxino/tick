@@ -3,7 +3,8 @@
   <h1>Tick</h1>
   <p>把系统定时任务变成看得懂、改得动的自动化，支持 macOS 和 Windows。</p>
   <p>
-    <a href="https://github.com/yuxino/tick/releases/latest">下载最新版</a>
+    <a href="https://tick.yuxino.cn">官网</a>
+    · <a href="https://github.com/yuxino/tick/releases/latest">下载最新版</a>
     · <a href="#开发">从源码运行</a>
     · <a href="https://github.com/yuxino/tick/issues">Issue</a>
   </p>
