@@ -12,11 +12,11 @@
 <!-- project-demo-v1 -->
 ## 演示
 
-[![Tick](docs/demos/preview.gif)](docs/demos/demo.mp4)
-
-[观看视频](docs/demos/demo.mp4)
-
-设置任务、触发运行，再查看执行结果和日志。
+<div align="center">
+  <p><a href="docs/demos/demo.mp4"><img src="docs/demos/preview.gif" alt="Tick"></a></p>
+  <p>设置任务、触发运行，再查看执行结果和日志。</p>
+  <p><a href="docs/demos/demo.mp4">观看视频</a></p>
+</div>
 <!-- /project-demo-v1 -->
 
 ## 能做什么

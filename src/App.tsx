@@ -12,14 +12,10 @@ import {
   UnorderedListOutlined,
 } from "@ant-design/icons";
 import { Alert, Button, Popconfirm, Switch, Tabs, Typography, message } from "antd";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, lazy, Suspense } from "react";
+import type { ReactNode } from "react";
 import tickMascot from "./assets/tick-mascot.png";
-import { AutomationModal } from "./components/AutomationModal";
-import { JobFormModal } from "./components/JobFormModal";
 import { JobsTable } from "./components/JobsTable";
-import { LogsPanel } from "./components/LogsPanel";
-import { DefinitionPanel } from "./components/DefinitionPanel";
-import { SettingsModal } from "./components/SettingsModal";
 import {
   deleteScheduledJob,
   disableScheduledJob,
@@ -43,6 +39,14 @@ import {
 } from "./utils/scheduler";
 import { displayPath } from "./utils/paths";
 
+const AutomationModal = lazy(() => import("./components/AutomationModal").then((module) => ({ default: module.AutomationModal })));
+const JobFormModal = lazy(() => import("./components/JobFormModal").then((module) => ({ default: module.JobFormModal })));
+const SettingsModal = lazy(() => import("./components/SettingsModal").then((module) => ({ default: module.SettingsModal })));
+
+const LogsPanel = lazy(() => import("./components/LogsPanel").then((module) => ({ default: module.LogsPanel })));
+
+const DefinitionPanel = lazy(() => import("./components/DefinitionPanel").then((module) => ({ default: module.DefinitionPanel })));
+
 type MainView = "tasks" | "schedule";
 
 function App() {
@@ -57,7 +61,7 @@ function App() {
   const [busyId, setBusyId] = useState<string>();
   const [error, setError] = useState<string>();
   const [formOpen, setFormOpen] = useState(false);
-  const [editingJob, setEditingJob] = useState<ScheduledJob>();
+  const [formInitialValue, setFormInitialValue] = useState<ScheduledJobInput>();
   const [activeView, setActiveView] = useState<MainView>("tasks");
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [automationOpen, setAutomationOpen] = useState(false);
@@ -138,20 +142,20 @@ function App() {
       message.warning(loading ? "任务调度器仍在加载，请稍后重试" : "任务调度器信息加载失败，请先刷新");
       return;
     }
-    setEditingJob(undefined);
+    setFormInitialValue(emptyJobInput(capabilities));
     setAutomationDraft(undefined);
     setFormOpen(true);
   }
 
   function openEdit(job: ScheduledJob) {
-    setEditingJob(job);
+    setFormInitialValue(toJobInput(job));
     setAutomationDraft(undefined);
     setFormOpen(true);
   }
 
   function openGeneratedAutomation(draft: AutomationDraft) {
     setAutomationDraft(draft);
-    setEditingJob(undefined);
+    setFormInitialValue(draft.job);
     setAutomationOpen(false);
     setFormOpen(true);
   }
@@ -162,7 +166,7 @@ function App() {
       const saved = await saveScheduledJob(input);
       message.success("任务已保存");
       setFormOpen(false);
-      setEditingJob(undefined);
+      setFormInitialValue(undefined);
       setAutomationDraft(undefined);
       await loadJobs();
       setSelectedId(saved.id);
@@ -329,39 +333,53 @@ function App() {
         </div>
       </main>
 
-      <JobFormModal
-        open={formOpen}
-        initialValue={editingJob ? toJobInput(editingJob) : automationDraft?.job ?? emptyJobInput(capabilities)}
-        capabilities={capabilities}
-        saving={saving}
-        draftSummary={automationDraft?.summary}
-        draftRisks={automationDraft?.risks}
-        onCancel={() => {
-          setFormOpen(false);
-          setEditingJob(undefined);
-          setAutomationDraft(undefined);
-        }}
-        onSubmit={handleSave}
-      />
-      <AutomationModal
-        open={automationOpen}
-        capabilities={capabilities}
-        onCancel={() => setAutomationOpen(false)}
-        onManual={() => {
-          setAutomationOpen(false);
-          openCreate();
-        }}
-        onGenerated={openGeneratedAutomation}
-      />
-      <SettingsModal
-        open={settingsOpen}
-        nodeRuntime={nodeRuntime}
-        checkingNode={checkingNode}
-        onRecheckNode={recheckNodeRuntime}
-        onClose={() => setSettingsOpen(false)}
-      />
+      <Suspense fallback={null}>
+        {formOpen && formInitialValue && <JobFormModal
+          open={formOpen}
+          initialValue={formInitialValue}
+          capabilities={capabilities}
+          saving={saving}
+          draftSummary={automationDraft?.summary}
+          draftRisks={automationDraft?.risks}
+          onCancel={() => {
+            setFormOpen(false);
+            setFormInitialValue(undefined);
+            setAutomationDraft(undefined);
+          }}
+          onSubmit={handleSave}
+        />}
+        <DeferredModal open={automationOpen}>
+        <AutomationModal
+          open={automationOpen}
+          capabilities={capabilities}
+          onCancel={() => setAutomationOpen(false)}
+          onManual={() => {
+            setAutomationOpen(false);
+            openCreate();
+          }}
+          onGenerated={openGeneratedAutomation}
+        />
+        </DeferredModal>
+        <DeferredModal open={settingsOpen}>
+        <SettingsModal
+          open={settingsOpen}
+          nodeRuntime={nodeRuntime}
+          checkingNode={checkingNode}
+          onRecheckNode={recheckNodeRuntime}
+          onClose={() => setSettingsOpen(false)}
+        />
+        </DeferredModal>
+      </Suspense>
     </div>
   );
+}
+
+function DeferredModal({ open, children }: { open: boolean; children: ReactNode }) {
+  const [hasOpened, setHasOpened] = useState(open);
+  useEffect(() => {
+    if (open) setHasOpened(true);
+  }, [open]);
+  return open || hasOpened ? children : null;
 }
 
 function AppRail({
@@ -645,12 +663,12 @@ function DetailPanel({
           {
             key: "logs",
             label: "实时日志",
-            children: <LogsPanel job={job} homeDirectory={capabilities.homeDirectory} />,
+            children: <Suspense fallback={null}><LogsPanel job={job} homeDirectory={capabilities.homeDirectory} active={activeTab === "logs"} /></Suspense>,
           },
           {
             key: "definition",
             label: capabilities.definitionLabel,
-            children: <DefinitionPanel job={job} capabilities={capabilities} />,
+            children: <Suspense fallback={null}><DefinitionPanel job={job} capabilities={capabilities} /></Suspense>,
           },
         ]}
       />

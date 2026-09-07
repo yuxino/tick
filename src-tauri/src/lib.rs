@@ -1,5 +1,6 @@
 mod ai;
 mod file_ops;
+mod process_output;
 mod scheduler;
 
 use tauri::{

@@ -84,7 +84,17 @@ pub fn validate_execution(job: &ScheduledJob) -> Result<(), String> {
 pub fn spawn_detached(job: &ScheduledJob) -> Result<(), String> {
     let materialized = materialize_execution(job)?;
     let args = command_args(job, &materialized)?;
-    spawn_process(job, args).map(|_| ())
+    reap_child(spawn_process(job, args)?);
+    Ok(())
+}
+
+#[cfg(target_os = "macos")]
+fn reap_child(mut child: Child) -> tauri::async_runtime::JoinHandle<()> {
+    // Dropping std::process::Child does not reap it. Keep the UI nonblocking while
+    // collecting its exit status so repeated manual runs do not leave zombies.
+    tauri::async_runtime::spawn_blocking(move || {
+        let _ = child.wait();
+    })
 }
 
 pub fn run_and_wait(job: &ScheduledJob) -> Result<i32, String> {
@@ -137,6 +147,7 @@ fn spawn_process(job: &ScheduledJob, args: Vec<String>) -> Result<Child, String>
     let mut command = Command::new(program);
     command
         .args(rest)
+        .stdin(Stdio::null())
         .stdout(Stdio::from(stdout))
         .stderr(Stdio::from(stderr));
     if !job.execution.working_directory.trim().is_empty() {
@@ -597,6 +608,23 @@ fn quote_windows_argument(value: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn manual_child_is_reaped_after_exit() {
+        let child = Command::new("/usr/bin/true").spawn().unwrap();
+        let pid = child.id() as libc::pid_t;
+        tauri::async_runtime::block_on(reap_child(child)).unwrap();
+        let mut status = 0;
+        assert_eq!(
+            unsafe { libc::waitpid(pid, &mut status, libc::WNOHANG) },
+            -1
+        );
+        assert_eq!(
+            std::io::Error::last_os_error().raw_os_error(),
+            Some(libc::ECHILD)
+        );
+    }
 
     #[test]
     fn parses_windows_paths_quotes_empty_values_and_metacharacters() {

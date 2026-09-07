@@ -1,59 +1,40 @@
 import { ClearOutlined, ReloadOutlined } from "@ant-design/icons";
 import CodeMirror from "@uiw/react-codemirror";
 import { Alert, Button, Popconfirm, Space, Switch, Tabs, Tooltip, Typography } from "antd";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import { clearScheduledJobLog, readScheduledJobLog } from "../services/scheduler";
 import { tickEditorTheme } from "../editorTheme";
-import type { JobLog, LogKind, ScheduledJob } from "../types/scheduler";
+import type { LogKind, ScheduledJob } from "../types/scheduler";
 import { friendlyError } from "../utils/errors";
+import { useAsyncResource } from "../hooks/useAsyncResource";
 import { displayPath } from "../utils/paths";
 
 interface LogsPanelProps {
   job?: ScheduledJob;
   homeDirectory: string;
+  active: boolean;
 }
 
-export function LogsPanel({ job, homeDirectory }: LogsPanelProps) {
+export function LogsPanel({ job, homeDirectory, active }: LogsPanelProps) {
   const [kind, setKind] = useState<LogKind>("stdout");
-  const [log, setLog] = useState<JobLog>();
-  const [loading, setLoading] = useState(false);
   const [clearing, setClearing] = useState(false);
   const [autoRefresh, setAutoRefresh] = useState(true);
-  const [error, setError] = useState<string>();
-
-  const loadLog = useCallback(async () => {
-    if (!job) return;
-    setLoading(true);
-    setError(undefined);
-    try {
-      setLog(await readScheduledJobLog(job.id, kind));
-    } catch (err) {
-      setError(friendlyError(err));
-    } finally {
-      setLoading(false);
-    }
-  }, [job, kind]);
-
-  useEffect(() => {
-    setLog(undefined);
-    loadLog();
-  }, [loadLog]);
-
-  useEffect(() => {
-    if (!autoRefresh || !job) return;
-    const timer = window.setInterval(loadLog, 2000);
-    return () => window.clearInterval(timer);
-  }, [autoRefresh, job, loadLog]);
+  const [clearError, setClearError] = useState<{ key: string; message: string }>();
+  const jobId = job?.id;
+  const resourceKey = `${jobId ?? ""}:${kind}`;
+  const read = useCallback(() => jobId ? readScheduledJobLog(jobId, kind) : Promise.resolve(undefined), [jobId, kind]);
+  const { value: log, loading, error: readError, refresh: loadLog } = useAsyncResource(resourceKey, read, autoRefresh && jobId ? 2000 : undefined, active);
+  const error = clearError?.key === resourceKey ? clearError.message : readError ? friendlyError(readError) : undefined;
 
   async function handleClear() {
     if (!job) return;
     setClearing(true);
-    setError(undefined);
+    setClearError(undefined);
     try {
       await clearScheduledJobLog(job.id, kind);
       await loadLog();
     } catch (err) {
-      setError(friendlyError(err));
+      setClearError({ key: resourceKey, message: friendlyError(err) });
     } finally {
       setClearing(false);
     }

@@ -7,10 +7,11 @@
     "branding:verify": "node scripts/verify-app-branding.mjs Tick",
     "dev": "vite",
     "build": "npm run branding:verify && tsc && vite build",
-    "check": "npm run version:verify && cargo fmt --manifest-path src-tauri/Cargo.toml -- --check && cargo clippy --manifest-path src-tauri/Cargo.toml --locked -- -D warnings && cargo test --manifest-path src-tauri/Cargo.toml --locked && npm run test:path-privacy && npm run test:updater && npm run build",
+    "check": "npm run version:verify && cargo fmt --manifest-path src-tauri/Cargo.toml -- --check && cargo clippy --manifest-path src-tauri/Cargo.toml --locked -- -D warnings && cargo test --manifest-path src-tauri/Cargo.toml --locked && npm run test:path-privacy && npm run test:updater && npm run test:resources && npm run build",
     "build:windows": "node scripts/build-windows.mjs",
     "test:path-privacy": "node --test scripts/scan-binary-paths.test.mjs",
     "test:updater": "node scripts/verify-updater-config.mjs && vitest run src/services/appUpdater.test.ts scripts/updater-release.test.mjs",
+    "test:resources": "vitest run src/utils/asyncResource.test.ts",
     "version:verify": "node scripts/verify-version.mjs",
     "preview": "vite preview",
     "tauri": "tauri"

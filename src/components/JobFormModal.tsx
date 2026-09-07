@@ -16,7 +16,7 @@ import { defaultExecution, defaultSchedule, emptyJobInput } from "../utils/sched
 
 interface JobFormModalProps {
   open: boolean;
-  initialValue?: ScheduledJobInput;
+  initialValue: ScheduledJobInput;
   capabilities: SchedulerCapabilities;
   saving: boolean;
   onCancel: () => void;
@@ -49,11 +49,12 @@ export function JobFormModal({
 
   useEffect(() => {
     if (open) {
-      const nextValue = initialValue ?? emptyJobInput(capabilities);
+      const nextValue = initialValue;
+      form.resetFields();
       form.setFieldsValue(nextValue);
       setSchedulePreset(detectSchedulePreset(nextValue.schedule));
     }
-  }, [capabilities, form, initialValue, open]);
+  }, [form, initialValue, open]);
 
   async function handleOk() {
     await form.validateFields();

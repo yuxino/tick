@@ -1,4 +1,5 @@
 use crate::file_ops::replace_file;
+use crate::process_output::{capture_output, CapturedStream};
 use crate::scheduler::models::ScheduledJobInput;
 use crate::scheduler::validation::validate_job_input;
 use serde::{Deserialize, Serialize};
@@ -6,9 +7,10 @@ use serde_json::{Map, Value};
 use std::fs::OpenOptions;
 use std::io::Write;
 use std::path::PathBuf;
+use std::sync::OnceLock;
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
 use tokio::process::Command as TokioCommand;
-use tokio::time::{timeout, Duration};
+use tokio::time::Duration;
 
 const DEEPSEEK_URL: &str = "https://api.deepseek.com/chat/completions";
 const DEEPSEEK_MODEL: &str = "deepseek-chat";
@@ -291,7 +293,7 @@ pub async fn run_node_script_debug(
     command
         .args(node_arguments)
         .kill_on_drop(true)
-        .arg(&script_path);
+        .arg(&script_path.0);
 
     #[cfg(target_os = "windows")]
     {
@@ -308,27 +310,36 @@ pub async fn run_node_script_debug(
         }
     }
 
-    let output_result = timeout(Duration::from_secs(15), command.output()).await;
-    let duration_ms = started_at.elapsed().as_millis();
-    let _ = std::fs::remove_file(&script_path);
-
-    match output_result {
-        Ok(Ok(output)) => Ok(RunNodeScriptDebugResponse {
-            stdout: String::from_utf8_lossy(&output.stdout).to_string(),
-            stderr: String::from_utf8_lossy(&output.stderr).to_string(),
-            exit_code: output.status.code(),
-            duration_ms,
-            timed_out: false,
-        }),
-        Ok(Err(err)) => Err(format!("运行 Node.js 脚本失败：{err}")),
-        Err(_) => Ok(RunNodeScriptDebugResponse {
-            stdout: String::new(),
-            stderr: "调试运行超过 15 秒，已停止等待。".to_string(),
-            exit_code: None,
-            duration_ms,
-            timed_out: true,
-        }),
+    let output = capture_output(&mut command, Duration::from_secs(15), 256 * 1024)
+        .await
+        .map_err(|err| format!("运行 Node.js 脚本失败：{err}"))?;
+    let mut stderr = debug_stream_text(&output.stderr);
+    if output.timed_out {
+        stderr.push_str("\n调试运行超过 15 秒，已停止等待。\n");
     }
+    Ok(RunNodeScriptDebugResponse {
+        stdout: debug_stream_text(&output.stdout),
+        stderr,
+        exit_code: output.status.and_then(|status| status.code()),
+        duration_ms: started_at.elapsed().as_millis(),
+        timed_out: output.timed_out,
+    })
+}
+
+struct DebugScript(PathBuf);
+
+impl Drop for DebugScript {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_file(&self.0);
+    }
+}
+
+fn debug_stream_text(output: &CapturedStream) -> String {
+    let mut text = String::from_utf8_lossy(&output.bytes).into_owned();
+    if output.truncated {
+        text.push_str("\n[Tick] 调试输出过多，仅保留前 256 KiB。\n");
+    }
+    text
 }
 
 fn deepseek_api_key() -> Result<String, String> {
@@ -422,11 +433,27 @@ fn mask_api_key(key: &str) -> String {
     }
 }
 
+fn deepseek_client() -> Result<&'static reqwest::Client, String> {
+    static CLIENT: OnceLock<Result<reqwest::Client, String>> = OnceLock::new();
+    CLIENT
+        .get_or_init(|| {
+            // Share the updater's existing ring provider instead of bundling another TLS stack.
+            let _ = rustls::crypto::ring::default_provider().install_default();
+            reqwest::Client::builder()
+                .connect_timeout(Duration::from_secs(10))
+                .timeout(Duration::from_secs(90))
+                .build()
+                .map_err(|err| format!("无法初始化 DeepSeek 连接：{err}"))
+        })
+        .as_ref()
+        .map_err(Clone::clone)
+}
+
 async fn send_deepseek_request(
     api_key: &str,
     request: &DeepSeekRequest,
 ) -> Result<DeepSeekResponse, String> {
-    let response = reqwest::Client::new()
+    let response = deepseek_client()?
         .post(DEEPSEEK_URL)
         .bearer_auth(api_key)
         .json(request)
@@ -449,7 +476,7 @@ async fn send_deepseek_request(
         .map_err(|err| format!("解析 DeepSeek 响应失败：{err}"))
 }
 
-fn write_debug_script(script: &str) -> Result<PathBuf, String> {
+fn write_debug_script(script: &str) -> Result<DebugScript, String> {
     let timestamp = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map_err(|err| err.to_string())?
@@ -464,9 +491,10 @@ fn write_debug_script(script: &str) -> Result<PathBuf, String> {
         options.mode(0o600);
     }
     let mut file = options.open(&path).map_err(|err| err.to_string())?;
+    let script_path = DebugScript(path);
     file.write_all(format!("{script}\n").as_bytes())
         .map_err(|err| err.to_string())?;
-    Ok(path)
+    Ok(script_path)
 }
 
 #[cfg(target_os = "macos")]
@@ -972,6 +1000,38 @@ mod tests {
         validate_windows_native_capabilities, AutomationCompletion,
     };
     use crate::scheduler::models::{ExecutionMode, ScheduleMode};
+
+    #[test]
+    fn http_client_initializes_tls_without_an_updater_check_and_is_reused() {
+        let first = super::deepseek_client().unwrap();
+        let second = super::deepseek_client().unwrap();
+        assert!(std::ptr::eq(first, second));
+    }
+
+    #[test]
+    fn debug_script_is_removed_when_the_run_scope_ends() {
+        let script = super::write_debug_script("console.log('safe fixture')").unwrap();
+        let path = script.0.clone();
+        assert!(path.exists());
+        drop(script);
+        assert!(!path.exists());
+    }
+
+    #[test]
+    fn capped_debug_output_is_labeled() {
+        assert_eq!(
+            super::debug_stream_text(&super::CapturedStream {
+                bytes: b"ok".to_vec(),
+                truncated: false,
+            }),
+            "ok"
+        );
+        assert!(super::debug_stream_text(&super::CapturedStream {
+            bytes: b"ok".to_vec(),
+            truncated: true,
+        })
+        .contains("256 KiB"));
+    }
 
     #[test]
     fn validates_api_key_length_without_requiring_a_specific_prefix() {
