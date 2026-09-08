@@ -1,13 +1,15 @@
 use super::executor::interpreter_parts;
 use super::models::{ExecutionMode, JobExecution};
+use crate::process_output::capture_output;
 use serde::Serialize;
 use std::path::Path;
 #[cfg(any(target_os = "windows", test))]
 use std::path::PathBuf;
 use tokio::process::Command;
-use tokio::time::{timeout, Duration};
+use tokio::time::Duration;
 
 const NODE_DETECTION_TIMEOUT: Duration = Duration::from_secs(3);
+const MAX_NODE_OUTPUT_BYTES: usize = 4 * 1024;
 const MAX_DETAIL_CHARS: usize = 200;
 
 #[derive(Debug, Clone, Serialize)]
@@ -180,33 +182,48 @@ async fn probe_node_command(command: &[String]) -> NodeRuntimeStatus {
             process.arg(node);
         }
     }
-    process.arg("--version").kill_on_drop(true);
+    process.arg("--version");
 
     #[cfg(target_os = "windows")]
     hide_windows_console(&mut process);
 
-    match timeout(NODE_DETECTION_TIMEOUT, process.output()).await {
-        Ok(Ok(output)) if output.status.success() => {
-            let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
-            let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+    probe_node_process(&mut process, &command_label(command)).await
+}
+
+async fn probe_node_process(process: &mut Command, label: &str) -> NodeRuntimeStatus {
+    match capture_output(process, NODE_DETECTION_TIMEOUT, MAX_NODE_OUTPUT_BYTES).await {
+        Ok(output) if output.timed_out => unavailable(format!("Node.js 检测超过 3 秒：{label}")),
+        Ok(output) if output.stdout.truncated || output.stderr.truncated => {
+            unavailable("Node.js 检测输出超过 4 KiB，已忽略异常结果".to_string())
+        }
+        Ok(output) if output.status.is_some_and(|status| status.success()) => {
+            let stdout = String::from_utf8_lossy(&output.stdout.bytes)
+                .trim()
+                .to_string();
+            let stderr = String::from_utf8_lossy(&output.stderr.bytes)
+                .trim()
+                .to_string();
             let version = if stdout.is_empty() { stderr } else { stdout };
             NodeRuntimeStatus {
                 available: true,
                 version: (!version.is_empty()).then_some(version),
-                executable_path: Some(command_label(command)),
+                executable_path: Some(label.to_string()),
                 reason: None,
             }
         }
-        Ok(Ok(output)) => {
-            let stderr = bounded_detail(&String::from_utf8_lossy(&output.stderr));
+        Ok(output) => {
+            let stderr = bounded_detail(&String::from_utf8_lossy(&output.stderr.bytes));
             unavailable(if stderr.is_empty() {
-                format!("Node.js 检测命令退出码为 {}", output.status)
+                let status = output
+                    .status
+                    .map(|status| status.to_string())
+                    .unwrap_or_else(|| "未知".to_string());
+                format!("Node.js 检测命令退出码为 {status}")
             } else {
                 format!("Node.js 检测失败：{stderr}")
             })
         }
-        Ok(Err(error)) => unavailable(format!("无法启动 {}：{error}", command_label(command))),
-        Err(_) => unavailable(format!("Node.js 检测超过 3 秒：{}", command_label(command))),
+        Err(error) => unavailable(format!("无法启动 {label}：{error}")),
     }
 }
 
@@ -388,6 +405,59 @@ fn node_executable_path(path: PathBuf) -> PathBuf {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn detects_a_real_node_version() {
+        let status = probe_node_command(&["node".to_string()]).await;
+        assert!(status.available, "{:?}", status.reason);
+        assert!(status.version.unwrap().starts_with('v'));
+    }
+
+    #[tokio::test]
+    async fn rejects_excessive_detection_output_from_either_stream() {
+        for stream in ["stdout", "stderr"] {
+            let mut process = Command::new("node");
+            process.args([
+                "-e",
+                &format!("process.{stream}.write('x'.repeat(1048576));"),
+            ]);
+            let status = probe_node_process(&mut process, "noisy Node.js fixture").await;
+            assert!(!status.available, "accepted excessive {stream}");
+            assert!(status.version.is_none());
+            assert!(status.reason.unwrap().contains("输出超过"));
+        }
+    }
+
+    #[tokio::test]
+    async fn keeps_failure_details_bounded_without_splitting_unicode() {
+        let mut process = Command::new("node");
+        process.args([
+            "-e",
+            "process.stderr.write('错'.repeat(300)); process.exitCode = 2;",
+        ]);
+        let status = probe_node_process(&mut process, "failing Node.js fixture").await;
+        assert!(!status.available);
+        assert_eq!(
+            status.reason.unwrap(),
+            format!("Node.js 检测失败：{}", "错".repeat(MAX_DETAIL_CHARS))
+        );
+    }
+
+    #[tokio::test]
+    async fn reports_detection_spawn_failure() {
+        let status = probe_node_command(&["tick-nonexistent-node-runtime".to_string()]).await;
+        assert!(!status.available);
+        assert!(status.reason.unwrap().contains("无法启动"));
+    }
+
+    #[tokio::test]
+    async fn reports_detection_timeout() {
+        let mut process = Command::new("node");
+        process.args(["-e", "setInterval(() => {}, 1000);"]);
+        let status = probe_node_process(&mut process, "hanging Node.js fixture").await;
+        assert!(!status.available);
+        assert!(status.reason.unwrap().contains("检测超过 3 秒"));
+    }
 
     fn execution(mode: ExecutionMode, interpreter: &str) -> JobExecution {
         JobExecution {
