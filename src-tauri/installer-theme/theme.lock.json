@@ -1,10 +1,10 @@
 {
   "format": "yuxino-installer-lock-v2",
   "source": "yuxino/desktop-installer",
-  "version": "2.1.1",
+  "version": "2.1.2",
   "product": "tick",
   "repository": "https://github.com/yuxino/tick",
-  "size": 930219,
-  "unpackedSize": 3327760,
-  "sha256": "d96ec48fcb171bc1661ad1305a4d2a187aa2b85f9529507b4f975eea90625402"
+  "size": 930353,
+  "unpackedSize": 3327956,
+  "sha256": "c570b26948dae909b4da1d6574e22dda56843a7868c5a7c841711d786312af60"
 }
