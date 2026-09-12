@@ -49,6 +49,20 @@ describe("updater progress", () => {
 });
 
 describe("updater state and errors", () => {
+  it("waits for signature verification after download finishes", () => {
+    const downloading = updateViewReducer(initialUpdateState, { type: "download-started" });
+    const verifying = updateViewReducer(downloading, { type: "download-event", event: { event: "Finished" } });
+    expect(verifying.phase).toBe("verifying");
+    expect(verifying.progress.finished).toBe(true);
+  });
+
+  it("retains a restart retry after installation instead of asking for another download", () => {
+    const ready = updateViewReducer(initialUpdateState, { type: "ready" });
+    const failed = updateViewReducer(ready, { type: "error", message: "restart failed", retryRestart: true });
+    expect(failed.retryRestart).toBe(true);
+    expect(updateViewReducer(failed, { type: "checking" }).retryRestart).toBe(false);
+  });
+
   it("protects repeated actions with explicit busy phases", () => {
     const checking = updateViewReducer(initialUpdateState, { type: "checking" });
     const downloading = updateViewReducer(checking, { type: "download-started" });

@@ -26,6 +26,7 @@ export type UpdatePhase =
   | "current"
   | "available"
   | "downloading"
+  | "verifying"
   | "installing"
   | "ready"
   | "windows-installer"
@@ -37,6 +38,7 @@ export interface UpdateViewState {
   update?: UpdateMetadata;
   progress: DownloadProgress;
   error?: string;
+  retryRestart?: boolean;
 }
 
 export type UpdateViewAction =
@@ -49,7 +51,7 @@ export type UpdateViewAction =
   | { type: "installing" }
   | { type: "ready" }
   | { type: "windows-installer" }
-  | { type: "error"; message: string };
+  | { type: "error"; message: string; retryRestart?: boolean };
 
 export const initialUpdateState: UpdateViewState = {
   phase: "idle",
@@ -61,7 +63,7 @@ export function updateViewReducer(state: UpdateViewState, action: UpdateViewActi
     case "version":
       return { ...state, currentVersion: action.version };
     case "checking":
-      return { ...state, phase: "checking", update: undefined, error: undefined, progress: initialUpdateState.progress };
+      return { ...state, phase: "checking", update: undefined, error: undefined, retryRestart: false, progress: initialUpdateState.progress };
     case "current":
       return { ...state, phase: "current", update: undefined, error: undefined };
     case "available":
@@ -69,7 +71,7 @@ export function updateViewReducer(state: UpdateViewState, action: UpdateViewActi
     case "download-started":
       return { ...state, phase: "downloading", error: undefined, progress: initialUpdateState.progress };
     case "download-event":
-      return { ...state, progress: applyDownloadEvent(state.progress, action.event) };
+      return { ...state, phase: action.event.event === "Finished" ? "verifying" : state.phase, progress: applyDownloadEvent(state.progress, action.event) };
     case "installing":
       return { ...state, phase: "installing" };
     case "ready":
@@ -77,7 +79,7 @@ export function updateViewReducer(state: UpdateViewState, action: UpdateViewActi
     case "windows-installer":
       return { ...state, phase: "windows-installer" };
     case "error":
-      return { ...state, phase: "error", error: action.message };
+      return { ...state, phase: "error", error: action.message, retryRestart: action.retryRestart ?? false };
   }
 }
 

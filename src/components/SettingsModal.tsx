@@ -49,7 +49,7 @@ export function SettingsModal({ open, nodeRuntime, checkingNode, onRecheckNode, 
   const updateRef = useRef<AppUpdate | undefined>(undefined);
   const updateActionRef = useRef(false);
   const windows = isWindowsRuntime();
-  const updateBusy = ["checking", "downloading", "installing"].includes(updateState.phase);
+  const updateBusy = ["checking", "downloading", "verifying", "installing"].includes(updateState.phase);
   const percent = downloadPercent(updateState.progress);
 
   const loadStatus = useCallback(async () => {
@@ -142,7 +142,7 @@ export function SettingsModal({ open, nodeRuntime, checkingNode, onRecheckNode, 
     try {
       await relaunchTick();
     } catch (error) {
-      dispatchUpdate({ type: "error", message: describeUpdateError(error) });
+      dispatchUpdate({ type: "error", message: `更新已安装，但重新启动失败：${friendlyError(error)}`, retryRestart: true });
     } finally {
       updateActionRef.current = false;
     }
@@ -280,7 +280,7 @@ export function SettingsModal({ open, nodeRuntime, checkingNode, onRecheckNode, 
               <Alert type="success" showIcon title={`当前 v${updateState.currentVersion ?? "—"} 已是最新版`} />
             )}
 
-            {updateState.update && ["available", "downloading", "installing", "ready", "windows-installer"].includes(updateState.phase) && (
+            {updateState.update && ["available", "downloading", "verifying", "installing", "ready", "windows-installer"].includes(updateState.phase) && (
               <div className="update-release">
                 <div className="update-release-heading">
                   <strong>发现 v{updateState.update.version}</strong>
@@ -308,17 +308,21 @@ export function SettingsModal({ open, nodeRuntime, checkingNode, onRecheckNode, 
               </div>
             )}
 
+            {updateState.phase === "verifying" && (
+              <Alert type="info" showIcon title="下载完成，正在验证更新签名…" />
+            )}
+
             {updateState.phase === "installing" && (
               <Alert
                 type="info"
                 showIcon
-                title={windows ? "正在验证签名并交给 Windows 安装器" : "正在验证签名并安装"}
-                description={windows ? "验证通过后 Tick 会按安装器限制关闭，请在安装窗口中完成更新。" : "验证失败会立即停止，不会安装未验证的软件。"}
+                title={windows ? "正在启动 Windows 更新程序" : "正在安装已验证的更新"}
+                description={windows ? "Tick 将关闭并显示更新进度，完成后自动重新打开。" : "安装完成后，你可以点击重新启动。"}
               />
             )}
 
             {updateState.phase === "windows-installer" && (
-              <Alert type="info" showIcon title="Windows 安装器已启动" description="请按照安装器窗口完成更新；重启时机由安装器控制。" />
+              <Alert type="info" showIcon title="Windows 更新程序已启动" description="正在更新，完成后会自动重新打开 Tick。" />
             )}
 
             {updateState.phase === "ready" && (
@@ -348,7 +352,9 @@ export function SettingsModal({ open, nodeRuntime, checkingNode, onRecheckNode, 
             )}
             {updateState.phase === "error" && (
               <>
-                <Button type="primary" icon={<ReloadOutlined />} onClick={checkUpdate}>重新检查</Button>
+                <Button type="primary" icon={<ReloadOutlined />} onClick={updateState.retryRestart ? restartAfterUpdate : checkUpdate}>
+                  {updateState.retryRestart ? "重试重新启动" : "重新检查"}
+                </Button>
                 <Button icon={<LinkOutlined />} onClick={openReleasesRecovery}>打开 Releases 手动恢复</Button>
               </>
             )}
